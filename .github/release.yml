@@ -1,0 +1,12 @@
+changelog:
+  exclude:
+    authors: [dependabot]
+  categories:
+    - title: Instruments
+      labels: [enhancement]
+    - title: Fixes
+      labels: [bug]
+    - title: Docs and art
+      labels: [docs]
+    - title: Other changes
+      labels: ['*']
