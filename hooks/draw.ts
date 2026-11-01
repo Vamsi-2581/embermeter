@@ -10,12 +10,15 @@ import {
   compliance,
   costRate,
   ctxWeight,
+  dayKey,
   dur,
   fileBoard,
+  fileWeight,
   forecast,
   health,
   kfmt,
   lastDays,
+  limitEta,
   modelSplit,
   money,
   short,
@@ -23,6 +26,7 @@ import {
   throughput,
   toolBoard,
   until,
+  weekCompare,
 } from './core'
 
 // ---------------------------------------------------------------- design tokens
@@ -329,7 +333,7 @@ export const header = (D: Draw, b: Board, cfg: Cfg) => {
     dot(D, sx, sy - 4, busy ? p.amber : p.faint, busy) +
     txt(D, sx + 12, sy, state, { size: 11, weight: 600, color: busy ? p.amber : p.sub, mono: b.running }) +
     txt(D, D.W - 14, sy, `turn ${b.turnCount} · ${dur(b.now - b.startedAt)}`, { size: 10, anchor: 'end', mono: true }) +
-    (wide ? txt(D, D.W - 14, 46, b.model ? short(b.model, 28) : 'model –', { size: 9.5, anchor: 'end', color: p.faint, mono: true }) : '')
+    (wide ? txt(D, D.W - 14, 46, [b.branch ? `on ${short(b.branch, 20)}` : '', b.model ? short(b.model, 28) : 'model –'].filter(Boolean).join(' · '), { size: 9.5, anchor: 'end', color: p.faint, mono: true }) : '')
   return svg(D, H, body)
 }
 
@@ -337,15 +341,19 @@ const limitsRow = (D: Draw, b: Board, y: number, limits: Limit[]) => {
   if (!limits.length) return { h: 0, body: '' }
   const prev = D.prev?.ctx?.limits ?? []
   const h = 30 + limits.length * 22
-  let body = panel(D, 0, y, D.W, h, 'Rate limits', 'resets in')
+  const etas = limitEta(b)
+  let body = panel(D, 0, y, D.W, h, 'Rate limits', 'resets in · or fills in, at this pace')
   limits.forEach((l, i) => {
     const ly = y + 34 + i * 22
     const before = prev.find(x => x.kind === l.kind)?.pct
+    const eta = etas.find(e => e.kind === l.kind)?.etaMs ?? null
     body +=
       txt(D, 14, ly + 6, l.kind.replace(/_/g, ' '), { size: 10, color: D.p.ink }) +
       meter(D, 120, ly, D.W - 250, l.pct / 100, before !== undefined ? before / 100 : null, level(D, l.pct / 100), 6) +
       txt(D, D.W - 96, ly + 7, `${l.pct}%`, { size: 10, mono: true, anchor: 'end', color: level(D, l.pct / 100) }) +
-      txt(D, D.W - 14, ly + 7, until(l.resetsAt, b.now) || '–', { size: 10, mono: true, anchor: 'end' })
+      (eta !== null
+        ? txt(D, D.W - 14, ly + 7, `full ~${dur(eta)}`, { size: 10, mono: true, anchor: 'end', color: D.p.rust })
+        : txt(D, D.W - 14, ly + 7, until(l.resetsAt, b.now) || '–', { size: 10, mono: true, anchor: 'end' }))
   })
   return { h, body }
 }
@@ -554,6 +562,20 @@ export const contextPage = (D: Draw, b: Board) => {
     y += wh + gap
   }
 
+  // The files whose reads and edits fed the window most.
+  const heavy = fileWeight(b).slice(0, 5)
+  if (heavy.length) {
+    const hh = 40 + heavy.length * 20
+    parts.push(panel(D, 0, y, D.W, hh, 'Heaviest files', 'est. tokens fed · reads'))
+    heavy.forEach((f, i) => {
+      const ry = y + 44 + i * 20
+      parts.push(txt(D, 14, ry, shortPath(f.path, D.W >= 600 ? 60 : 34), { size: 10, mono: true, color: p.ink }))
+      parts.push(txt(D, D.W - 60, ry, kfmt(f.out), { size: 10, mono: true, anchor: 'end', color: i === 0 ? p.amber : p.ink }))
+      parts.push(txt(D, D.W - 14, ry, `${f.read}×`, { size: 10, mono: true, anchor: 'end' }))
+    })
+    y += hh + gap
+  }
+
   // Memory files and MCP tools: the always-loaded weight in the window.
   if (cp && (cp.memory.length || cp.mcp.length)) {
     const mem = cp.memory.slice(0, 6)
@@ -640,7 +662,7 @@ export const files = (D: Draw, b: Board) => {
     parts.push(`<rect x="${r1(x + 0.5)}" y="${y + 0.5}" width="${r1(tw - 1)}" height="43" rx="7" fill="${col}" fill-opacity="${changed ? 0.1 + 0.22 * heat : 0.05}" stroke="${col}" stroke-opacity="0.45"/>`)
     parts.push(`<rect x="${r1(x + 0.5)}" y="${y + 9}" width="3" height="26" rx="1.5" fill="${col}"/>`)
     parts.push(txt(D, x + 12, y + 18, shortPath(r.path, cols === 3 ? 27 : 26), { size: 10, weight: 600, color: p.ink, mono: true }))
-    parts.push(txt(D, x + 12, y + 34, `${r.edit}e · ${r.write}w · ${r.read}r`, { size: 9.5, mono: true }))
+    parts.push(txt(D, x + 12, y + 34, `${r.edit}e · ${r.write}w · ${r.read}r${r.out ? ` · ${kfmt(r.out)} fed` : ''}`, { size: 9.5, mono: true }))
   })
   return svg(D, h, parts.join(''))
 }
@@ -757,7 +779,7 @@ export const spend = (D: Draw, b: Board, cfg: Cfg, life: Lifetime | null) => {
     const lines = Math.ceil(days.length / per)
     const cw = (D.W - 28) / per
     const cellH = wide ? 26 : 22
-    const dh = 34 + lines * (cellH + 4) + 22
+    const dh = 34 + lines * (cellH + 4) + 40
     const top30 = Math.max(0.0001, ...days.map(d => d.usd))
     const active = days.filter(d => d.turns > 0).length
     const sum = days.reduce((s, d) => s + d.usd, 0)
@@ -771,7 +793,19 @@ export const spend = (D: Draw, b: Board, cfg: Cfg, life: Lifetime | null) => {
     })
     const ly = y + 34 + lines * (cellH + 4) + 12
     parts.push(txt(D, 14, ly, days[0]?.key.slice(5) ?? '', { size: 9, mono: true, color: p.faint }))
-    parts.push(txt(D, D.W - 14, ly, `today ${money(days[days.length - 1]?.usd ?? 0)}`, { size: 9, mono: true, anchor: 'end', color: p.amber }))
+    const todayUsd = days[days.length - 1]?.usd ?? 0
+    const overDay = cfg.dailyBudgetUsd > 0 && todayUsd >= cfg.dailyBudgetUsd
+    parts.push(
+      txt(D, D.W - 14, ly, `today ${money(todayUsd)}${cfg.dailyBudgetUsd > 0 ? ` of ${money(cfg.dailyBudgetUsd)}` : ''}`, { size: 9, mono: true, anchor: 'end', color: overDay ? p.rust : p.amber }),
+    )
+    const wk = weekCompare(life, b.now)
+    parts.push(
+      txt(D, 14, ly + 18, `last 7 days ${money(wk.week)}${wk.change !== null ? ` · ${wk.change >= 0 ? '+' : ''}${Math.round(wk.change * 100)}% on the week before` : ''}`, {
+        size: 9.5,
+        mono: true,
+        color: wk.change !== null && wk.change > 0.25 ? p.amber : p.sub,
+      }),
+    )
     y += dh
   } else {
     y -= gap
@@ -868,4 +902,43 @@ export const strip = (D: Draw, b: Board, cfg: Cfg) => {
     mini(316, v?.discharging ? 'bat ↓' : 'bat', v?.pct != null ? `${v.pct}%` : '–', v?.pct != null ? v.pct / 100 : null, null, v?.pct != null ? level(D, 1 - v.pct / 100) : p.faint) +
     txt(D, W - 10, 18, `${money(c?.usd)} · ${b.agents.filter(a => a.status === 'run').length} agents · ${b.calls.filter(x => x.status === 'run').length} tools`, { size: 10, mono: true, anchor: 'end' })
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} 29" width="${W}" height="29"><rect width="${W}" height="29" rx="8" fill="${p.ground}"/>${body}</svg>`
+}
+
+// A session card to share: the grade, six numbers, what did the work, and the sun as a mark. Static, no motion.
+export const card = (D: Draw, b: Board, cfg: Cfg) => {
+  const p = D.p
+  const W = 600
+  const H = 315
+  const h = health(b, cfg)
+  const gc = h.grade === 'A' ? p.sage : h.grade === 'B' ? p.steel : h.grade === 'C' ? p.amber : p.rust
+  const hit = cacheHit(b.tokens)
+  const calls = Object.values(b.stats).reduce((s, x) => s + x.n, 0)
+  const top = toolBoard(b)[0]
+  const stats: [string, string][] = [
+    ['Duration', dur(b.now - b.startedAt)],
+    ['Turns', String(b.turnCount)],
+    ['Tool calls', String(calls)],
+    ['Cost', money(b.ctx?.usd)],
+    ['Context', b.ctx?.pct != null ? `${Math.round(b.ctx.pct)}%` : '–'],
+    ['Cache hit', hit !== null ? `${Math.round(hit * 100)}%` : '–'],
+  ]
+  let body =
+    `<circle cx="${W - 72}" cy="78" r="44" fill="${p.amber}" opacity="0.9"/>` +
+    `<circle cx="${W - 72}" cy="78" r="56" fill="none" stroke="${p.ink}" stroke-opacity="0.18"/>` +
+    label(D, 32, 40, 'Embermeter · session card') +
+    txt(D, 32, 58, `${dayKey(b.now)}${b.branch ? ` · ${short(b.branch, 24)}` : ''}`, { size: 10, mono: true, color: p.faint }) +
+    `<rect x="32.5" y="78.5" width="62" height="62" rx="12" fill="none" stroke="${gc}" stroke-width="1.6"/>` +
+    txt(D, 63.5, 121, h.grade, { size: 34, weight: 700, mono: true, anchor: 'middle', color: gc }) +
+    txt(D, 112, 104, `${h.score}/100`, { size: 20, weight: 600, mono: true, color: p.ink }) +
+    txt(D, 112, 124, h.reasons.length ? short(h.reasons.slice(0, 2).join(' · '), 44) : 'all clear', { size: 11, color: p.sub })
+  stats.forEach(([k, v], i) => {
+    const x = 32 + (i % 3) * 182
+    const y = 180 + Math.floor(i / 3) * 52
+    body += label(D, x, y, k) + txt(D, x, y + 24, v, { size: 20, weight: 600, mono: true, color: p.ink })
+  })
+  body +=
+    `<line x1="32" y1="${H - 44}" x2="${W - 32}" y2="${H - 44}" stroke="${p.line}"/>` +
+    txt(D, 32, H - 22, [b.model ? short(b.model, 26) : '', top ? `${top.tool} ×${top.n}` : ''].filter(Boolean).join(' · '), { size: 10, mono: true }) +
+    txt(D, W - 32, H - 22, 'Keep the ember low.', { size: 11, anchor: 'end', color: p.amber })
+  return svg(D, H, body, W)
 }
