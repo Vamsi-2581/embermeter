@@ -20,6 +20,10 @@ import {
   kfmt,
   log,
   money,
+  modelSplit,
+  lastDays,
+  weekCompare,
+  budgetRunway,
   newAlerts,
   normalize,
   parseConfig,
@@ -411,6 +415,10 @@ export const register: Register = (on, options) => {
     const D = drawContext(cfg, drawn[site] ?? null, cols)
     drawn[site] = b
     const warn = refuse(b.vitals, cfg)
+    const models = modelSplit(b)
+    const days = lastDays(life, b.now, 7)
+    const week = weekCompare(life, b.now)
+    const runway = budgetRunway(b, cfg)
 
     // Surfaces without Svg (the terminal) get the same data as text.
     const picture = (source: string, alt: string) => (Svg ? <Svg source={source} alt={alt} /> : <Text>{alt}</Text>)
@@ -471,6 +479,28 @@ export const register: Register = (on, options) => {
                   {c.tool} {c.detail} {c.ms !== null ? `· ${dur(c.ms)}` : ''}
                 </Text>
               ))}
+          </Box>
+        )}
+
+        {tab === 'spend' && (
+          <Box flexDirection="column">
+            <Text bold>Cost per model</Text>
+            {models.length === 0 && <Text color="subtle">No model spend recorded yet.</Text>}
+            {models.map(m => (
+              <Text color="subtle">
+                {m.model} · {money(m.usd)} · {Math.round(m.share * 100)}%
+              </Text>
+            ))}
+            <Text bold>Last seven days</Text>
+            {days.map(d => (
+              <Text color="subtle">
+                {d.key} · {money(d.usd)}
+              </Text>
+            ))}
+            <Text color="subtle">
+              Week over week · {money(week.prior)} prior · {week.change === null ? 'not available' : `${week.change >= 0 ? '+' : ''}${Math.round(week.change * 100)}%`}
+            </Text>
+            <Text color="subtle">Budget runway · {runway === null ? 'not available' : `~${runway} turns`}</Text>
           </Box>
         )}
 
