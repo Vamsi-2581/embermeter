@@ -29,7 +29,7 @@ node scripts/render-art.ts   # regenerate the README art in docs/art/
 | `hooks/draw.ts` | Design system and SVG builders | Pure strings. Colours only from `PALETTES`. Text only through `txt()`. |
 | `hooks/register.tsx` | Engine wiring: hooks, sensors, commands, pane | The only file that touches `$`. Every hook ends in `.catch(($, e, next) => next(e))`. |
 | `types/index.d.ts` | The `$.state` contract | Add a field here before you store it. Make it optional or handle it in `normalize()`, so older stored boards still load. |
-| `tests/` | `core.test.ts` (logic), `pane.test.tsx` (UI on every surface) | New logic gets a test. |
+| `tests/` | `core.test.ts` (logic), `draw.test.ts` (pages and escaping), `pane.test.tsx` (UI on every surface) | New logic gets a test. |
 | `scripts/render-docs.ts` | Panel screenshots for the README | Uses the same sample session for every image. |
 | `scripts/render-art.ts` | README art: hero, section plates, cluster, spec sheet, sign-off | Colours come from `PALETTES`; keep the operator's-manual voice. |
 
