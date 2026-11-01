@@ -1,3 +1,4 @@
+<a id="top"></a>
 <p align="center">
   <img src="docs/art/hero.svg" alt="Embermeter, model EM-1: a live instrument panel for Claude Code" width="880">
 </p>
@@ -5,11 +6,26 @@
 <p align="center">
   <a href="https://github.com/X-Saikat-93/embermeter/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/X-Saikat-93/embermeter/ci.yml?branch=main&style=flat-square&label=ci&labelColor=1a1917&color=93ae7e"></a>
   <a href="https://github.com/X-Saikat-93/embermeter/releases"><img alt="Release" src="https://img.shields.io/github/v/release/X-Saikat-93/embermeter?style=flat-square&labelColor=1a1917&color=e2a23c&display_name=tag"></a>
+  <a href="https://github.com/X-Saikat-93/embermeter/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://img.shields.io/github/actions/workflow/status/X-Saikat-93/embermeter/codeql.yml?branch=main&style=flat-square&label=codeql&labelColor=1a1917&color=93ae7e"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/X-Saikat-93/embermeter"><img alt="OpenSSF Scorecard" src="https://img.shields.io/ossf-scorecard/github.com/X-Saikat-93/embermeter?style=flat-square&label=scorecard&labelColor=1a1917&color=93ae7e"></a>
+  <a href="https://github.com/X-Saikat-93/embermeter/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/X-Saikat-93/embermeter?style=flat-square&labelColor=1a1917&color=c7b089"></a>
+  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-c7b089?style=flat-square&labelColor=1a1917"></a>
+</p>
+
+<p align="center">
   <img alt="Claude Code 2.1.287+" src="https://img.shields.io/badge/claude%20code-2.1.287%2B-e2a23c?style=flat-square&labelColor=1a1917">
+  <img alt="VS Code and desktop" src="https://img.shields.io/badge/surface-vs%20code%20·%20desktop%20·%20terminal-e2a23c?style=flat-square&labelColor=1a1917">
+  <img alt="TypeScript" src="https://img.shields.io/badge/typescript-strict-87a3b6?style=flat-square&logo=typescript&logoColor=87a3b6&labelColor=1a1917">
   <img alt="Network: none" src="https://img.shields.io/badge/network-none-87a3b6?style=flat-square&labelColor=1a1917">
   <img alt="Dependencies: 0" src="https://img.shields.io/badge/dependencies-0-87a3b6?style=flat-square&labelColor=1a1917">
-  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-c7b089?style=flat-square&labelColor=1a1917"></a>
+  <img alt="Tests: 18" src="https://img.shields.io/badge/tests-18%20passing-93ae7e?style=flat-square&labelColor=1a1917">
+</p>
+
+<p align="center">
+  <a href="https://github.com/X-Saikat-93/embermeter/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/X-Saikat-93/embermeter?style=flat-square&logo=github&logoColor=c7b089&labelColor=1a1917&color=e2a23c"></a>
+  <a href="https://github.com/X-Saikat-93/embermeter/discussions"><img alt="Discussions" src="https://img.shields.io/github/discussions/X-Saikat-93/embermeter?style=flat-square&labelColor=1a1917&color=c7b089"></a>
+  <a href="https://github.com/X-Saikat-93/embermeter/issues"><img alt="Issues" src="https://img.shields.io/github/issues/X-Saikat-93/embermeter?style=flat-square&labelColor=1a1917&color=c7b089"></a>
+  <a href="CONTRIBUTING.md"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-93ae7e?style=flat-square&labelColor=1a1917"></a>
 </p>
 
 <p align="center">
@@ -27,22 +43,49 @@
 >
 > It's one folder that Claude Code loads, with no server, no network and no dependencies.
 
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <h4>◐ &nbsp;Forecasts</h4>
+      <sub>Turns left before auto-compact, cost per hour against your budget, and a countdown on every rate-limit window.</sub>
+    </td>
+    <td width="33%" valign="top">
+      <h4>◎ &nbsp;Explains</h4>
+      <sub>What fills the context, which tools are slow, which files churn, and an A–F health grade with its reasons.</sub>
+    </td>
+    <td width="33%" valign="top">
+      <h4>◆ &nbsp;Protects</h4>
+      <sub>A heat guard that holds builds, tests and installs while the CPU runs hot or the battery runs low.</sub>
+    </td>
+  </tr>
+</table>
+
 <a id="install"></a>
 <p align="center"><img src="docs/art/section-install.svg" alt="I. Installation" width="880"></p>
 
-You need **Claude Code 2.1.287 or later**. In any session:
+You need **Claude Code 2.1.287 or later**.
+
+<table>
+  <tr>
+    <td width="33%" valign="top"><b>1 · Install</b><br><sub>In any session, run the command below. Answer <code>y</code> to add the marketplace.</sub></td>
+    <td width="33%" valign="top"><b>2 · Choose a scope</b><br><sub><i>User</i> scope loads it in every session; <i>project</i> scope only in this repo.</sub></td>
+    <td width="33%" valign="top"><b>3 · Start a session</b><br><sub>The panel opens on its own. <code>/embermeter</code> brings it back at any time.</sub></td>
+  </tr>
+</table>
 
 ```
 /plugin install embermeter --marketplace X-Saikat-93/embermeter
 ```
 
-Answer `y` to add the marketplace, then choose a scope. *User* scope loads it in every session. From a shell:
+<details>
+<summary>From a shell instead</summary>
 
 ```sh
 claude plugin install embermeter --marketplace X-Saikat-93/embermeter
 ```
+</details>
 
-The panel opens with your next session. `/embermeter` brings it back at any time.
+<p align="right"><sub><a href="#top">↑ back to contents</a></sub></p>
 
 <a id="instruments"></a>
 <p align="center"><img src="docs/art/section-instruments.svg" alt="II. The Instruments" width="880"></p>
@@ -71,6 +114,8 @@ Most dashboards report what the agent already did. Embermeter also **forecasts**
 | 12 | **Session report** | A one-click Markdown report, plus totals across every session. An optional meter scores how often commands use a wrapper like `rtk`. |
 
 </details>
+
+<p align="right"><sub><a href="#top">↑ back to contents</a></sub></p>
 
 <a id="tour"></a>
 <p align="center"><img src="docs/art/section-tour.svg" alt="III. A Tour of the Panel" width="880"></p>
@@ -114,6 +159,8 @@ A slim strip rides above the prompt, and the status line carries a one-line summ
     <td width="38%" align="center"><img src="docs/overview-narrow.svg" alt="Overview in a narrow pane" width="250"></td>
   </tr>
 </table>
+
+<p align="right"><sub><a href="#top">↑ back to contents</a></sub></p>
 
 <a id="controls"></a>
 <p align="center"><img src="docs/art/section-controls.svg" alt="IV. Controls" width="880"></p>
@@ -171,6 +218,8 @@ A slim strip rides above the prompt, and the status line carries a one-line summ
 | **Linux** | Vitals and heat guard from `/sys` and `/proc` |
 | **macOS, Windows** | Vitals read `–` and the heat guard rests. Everything else works |
 
+<p align="right"><sub><a href="#top">↑ back to contents</a></sub></p>
+
 <a id="workings"></a>
 <p align="center"><img src="docs/art/section-workings.svg" alt="V. Inner Workings" width="880"></p>
 
@@ -203,6 +252,8 @@ flowchart LR
 
 **Running costs.** It runs one timer. The clock ticks each second only while work runs. Sensors are read every 5 seconds, and the context breakdown at most every 15. Every list is capped, so memory stays flat across long sessions. The full engineering tour is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+<p align="right"><sub><a href="#top">↑ back to contents</a></sub></p>
+
 <a id="safety"></a>
 <p align="center"><img src="docs/art/section-safety.svg" alt="VI. Safety Notice" width="880"></p>
 
@@ -215,6 +266,8 @@ flowchart LR
 - **Escaped drawing.** Every path, command and agent name passes through a single escaping function before it reaches SVG, and SVG renders in image mode, where scripts don't run.
 
 Found a hole? Please report it privately. See [SECURITY.md](SECURITY.md).
+
+<p align="right"><sub><a href="#top">↑ back to contents</a></sub></p>
 
 <a id="notes"></a>
 <p align="center"><img src="docs/art/section-notes.svg" alt="VII. Field Notes" width="880"></p>
@@ -263,6 +316,8 @@ Not noticeably. Each hook makes one small in-memory update and passes the event 
 - **Vitals for macOS and Windows.**
 
 Ideas are welcome in [Discussions](https://github.com/X-Saikat-93/embermeter/discussions).
+
+<p align="right"><sub><a href="#top">↑ back to contents</a></sub></p>
 
 <a id="bench"></a>
 <p align="center"><img src="docs/art/section-bench.svg" alt="VIII. The Workbench" width="880"></p>
