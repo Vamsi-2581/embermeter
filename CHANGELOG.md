@@ -5,6 +5,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+- **Spend** tab (key `3`): a cost waterfall turn by turn with the budget line, cost and tokens split by model, and a 30-day calendar of spend.
+- **Loop watch:** flags the same call repeated back to back, or the same call failing again and again. It raises an alert and costs 15 health points while it lasts.
+- **Context fed by tools:** an estimate of how many tokens each tool's results put back into the window, on the Tools and Context tabs and in the report.
+- Budget runway ("~N turns of budget left") and a budget alert at 50%.
+- **Washi** theme (`theme: washi`): rice paper, sumi ink and a vermilion signal, with matcha and indigo.
+- Daily totals in the lifetime store (last 60 days), shown on the Spend tab, the pane footer and in the report.
+
+### Changed
+- The README art and screenshots are redrawn in the washi style: paper grain, a vermilion sun dial, ink mountains, ensō section marks and a hanko seal.
+- Tabs are now Overview, Context, Spend, Tools, Files, Agents, System and Log, on keys `1`–`8`.
+
 ## [1.0.0] - 2026-11-01
 
 First public release.
