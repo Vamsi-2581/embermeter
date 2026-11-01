@@ -18,7 +18,7 @@
   <img alt="TypeScript" src="https://img.shields.io/badge/typescript-strict-34536b?style=flat-square&logo=typescript&logoColor=ebe2cf&labelColor=1d2124">
   <img alt="Network: none" src="https://img.shields.io/badge/network-none-34536b?style=flat-square&labelColor=1d2124">
   <img alt="Dependencies: 0" src="https://img.shields.io/badge/dependencies-0-34536b?style=flat-square&labelColor=1d2124">
-  <img alt="Tests: 26" src="https://img.shields.io/badge/tests-26%20passing-5d7848?style=flat-square&labelColor=1d2124">
+  <img alt="Tests: 33" src="https://img.shields.io/badge/tests-33%20passing-5d7848?style=flat-square&labelColor=1d2124">
 </p>
 
 <p align="center">
@@ -67,22 +67,49 @@ You need **Claude Code 2.1.287 or later**.
 
 <table>
   <tr>
-    <td width="33%" valign="top"><b>1 · Install</b><br><sub>In any session, run the command below. Answer <code>y</code> to add the marketplace.</sub></td>
-    <td width="33%" valign="top"><b>2 · Choose a scope</b><br><sub><i>User</i> scope loads it in every session; <i>project</i> scope only in this repo.</sub></td>
-    <td width="33%" valign="top"><b>3 · Start a session</b><br><sub>The panel opens on its own. <code>/embermeter</code> brings it back at any time.</sub></td>
+    <td width="33%" valign="top"><b>1 · Install</b><br><sub>One command, from Claude Code in a terminal or from VS Code's terminal (below). It adds the marketplace and installs for <i>you</i>, in every project.</sub></td>
+    <td width="33%" valign="top"><b>2 · Start a session</b><br><sub>Open a new chat. The panel opens on its own, and <code>/embermeter</code> brings it back at any time.</sub></td>
+    <td width="33%" valign="top"><b>3 · Make it yours</b><br><sub>Theme, budgets, quiet hours and the heat guard are settings. See <a href="#controls">IV · Controls</a>.</sub></td>
   </tr>
 </table>
+
+**Claude Code in a terminal.** In any session:
 
 ```
 /plugin install embermeter --marketplace X-Saikat-93/embermeter
 ```
 
-<details>
-<summary>From a shell instead</summary>
+Answer `y` to add the marketplace, then choose **User** scope.
+
+**VS Code extension.** The chat panel has no `/plugin` command, but the extension ships the Claude Code CLI. Open VS Code's terminal (<kbd>Ctrl</kbd>+<kbd>`</kbd>) and run, on Linux or macOS:
 
 ```sh
-claude plugin install embermeter --marketplace X-Saikat-93/embermeter
+"$(ls -d ~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude | sort -V | tail -1)" \
+  plugin install embermeter --marketplace X-Saikat-93/embermeter --scope user
 ```
+
+If you have the CLI on your `PATH` (`npm install -g @anthropic-ai/claude-code`), on any OS including Windows, it's simply:
+
+```sh
+claude plugin install embermeter --marketplace X-Saikat-93/embermeter --scope user
+```
+
+Then open a new chat. The "userConfig options not yet set" note after installing is fine: every option has a default.
+
+<details>
+<summary>Update, check or remove</summary>
+<br>
+
+With `claude` as above:
+
+```sh
+claude plugin marketplace update embermeter   # fetch the latest release
+claude plugin update embermeter@embermeter    # move the installed plugin to it
+claude plugin list                            # is it installed and enabled?
+claude plugin uninstall embermeter@embermeter # remove it
+```
+
+Start a new chat after an update.
 </details>
 
 <p align="right"><sub><a href="#top">↑ back to contents</a></sub></p>
@@ -100,22 +127,22 @@ Most dashboards report what the agent already did. Embermeter also **forecasts**
 
 | | Instrument | What it tells you |
 |---:|---|---|
-| 01 | **Runway to compact** | Learns how much context each turn uses and counts the turns left before auto-compact. |
+| 01 | **Runway to compact** | Learns how much context each turn uses, counts the turns left before auto-compact, and warns two turns out. |
 | 02 | **Context composition** | Messages, system tools, MCP tools, system prompt, memory files, skills and agents, with the compaction line marked. Also every always-loaded file and MCP tool, with its token cost. |
 | 03 | **Health grade** | One A–F score from context headroom, tool errors, temperature, denials, rate limits, budget and loops, with the reasons beside it. |
 | 04 | **Cache analytics** | Fresh input, cache read, cache write and output tokens. Also cache-hit rate, output speed, and the model behind every turn. |
 | 05 | **Cost burn** | Session cost, cost per hour and per turn, and an optional budget with a red line, alerts at 50%, 80% and 100%, and the turns left before it runs out. |
-| 06 | **Rate limits** | Every window, how full it is, and a countdown to its reset. |
+| 06 | **Rate limits** | Every window, how full it is, and a countdown to its reset, or, when it's filling faster, the time until it's full at this pace, with an alert 30 minutes out. |
 | 07 | **Live flow** | Prompt → Model → Gate → Tools → Subagents. Particles move only along links that are working. |
 | 08 | **Tool leaderboard** | Calls, the context each tool fed back, success and failure split, average and p95 duration, and the slowest calls. |
 | 09 | **File heatmap** | Every file read, edited or written, tinted by how much it changed. |
 | 10 | **Subagent swimlanes** | Each subagent on a time grid with its model, duration, tools and outcome. Click one to open its transcript. |
 | 11 | **Heat guard** | Holds heavy Bash jobs (builds, tests, installs, Docker…) while the CPU is over its limit or the battery is low. Claude is told why. |
-| 12 | **Session report** | A one-click Markdown report, plus totals across every session. An optional meter scores how often commands use a wrapper like `rtk`. |
-| 13 | **Loop watch** | Spots the same call three times in a row, or the same call failing three times, and tells you before the tokens burn. |
-| 14 | **Context fed by tools** | Estimates how many tokens each tool's results put back into the window, so you know whether `Read`, `Bash` or a web fetch is filling it. |
+| 12 | **Session report** | A one-click Markdown report, plus totals across every session. An optional meter scores how often commands use a wrapper like `rtk`. `/embermeter card` copies a shareable session card. |
+| 13 | **Loop watch** | Spots the same call three times in a row, or the same call failing three times, and tells you before the tokens burn. A turn that runs past `longTurnMin` gets a nudge too, with what it was last doing. |
+| 14 | **Context fed by tools** | Estimates how many tokens each tool's results put back into the window, so you know whether `Read`, `Bash` or a web fetch is filling it, and which files fed the most. |
 | 15 | **Cost waterfall** | Each turn stacked on the running total, colour-coded, with the budget line, plus cost and tokens split by model. |
-| 16 | **Thirty days** | A calendar of daily spend and turns, from totals kept on your machine. |
+| 16 | **Thirty days** | A calendar of daily spend and turns, from totals kept on your machine, with an optional daily budget and the last seven days against the seven before. |
 
 </details>
 
@@ -126,7 +153,7 @@ Most dashboards report what the agent already did. Embermeter also **forecasts**
 
 The panel has eight tabs, and keys `1`–`8` switch between them. It opens on the **Overview**:
 
-<p align="center"><img src="docs/header.svg" alt="Header: health grade, live turn timer, model and session clock" width="640"></p>
+<p align="center"><img src="docs/header.svg" alt="Header: health grade, live turn timer, git branch, model and session clock" width="640"></p>
 <p align="center"><img src="docs/overview.svg" alt="Overview: arc gauges for context, cost, cache hit and temperature; rate limits; live flow; trends; turn timeline" width="640"></p>
 
 <table>
@@ -151,6 +178,10 @@ The panel has eight tabs, and keys `1`–`8` switch between them. It opens on th
 A slim strip rides above the prompt, and the status line carries a one-line summary:
 
 <p align="center"><img src="docs/strip.svg" alt="Strip above the prompt" width="600"></p>
+
+At the end of a session, `/embermeter card` (or **Copy card** in the pane) copies a card like this as SVG, ready to save and share:
+
+<p align="center"><img src="docs/card.svg" alt="Session card: grade, duration, turns, tool calls, cost, context and cache hit" width="480"></p>
 
 <table>
   <tr>
@@ -179,6 +210,7 @@ A slim strip rides above the prompt, and the status line carries a one-line summ
 | `/embermeter context` · `spend` · `tools` · `files` · `agents` · `system` · `log` | Open it on that tab |
 | `/embermeter report` | Print the session report in the transcript |
 | `/embermeter copy` | Copy the report to the clipboard |
+| `/embermeter card` | Copy a session card (SVG) to share; the pane has a button too |
 | `/embermeter reset` | Zero this session's counters |
 | `/embermeter close` | Close the panel |
 
@@ -191,6 +223,8 @@ A slim strip rides above the prompt, and the status line carries a one-line summ
       "theme": "washi",       // or "night", "day"
       "motion": "smooth",     // "reduced" | "off"
       "budgetUsd": 5,         // red line on the cost gauge; 0 = off
+      "dailyBudgetUsd": 20,   // across sessions, per calendar day
+      "quietHours": "22-7",   // no toasts overnight
       "maxTempC": 80,         // heat guard limit, CPU package temperature
       "commandPrefix": "rtk"  // optional compliance meter
     }
@@ -208,8 +242,11 @@ A slim strip rides above the prompt, and the status line carries a one-line summ
 | `motion` | `smooth` | `smooth`: transitions and live animation · `reduced`: transitions only · `off`: static |
 | `openOnStart` | `true` | Open the panel when a session starts |
 | `band` | `true` | Show the strip above the prompt |
-| `alerts` | `true` | Toast once when context (70%, 85%), temperature, budget or a rate limit (90%) crosses its line |
+| `alerts` | `true` | Toast once when context (70%, 85%, two turns from compaction), temperature, a budget, a rate limit (90%, or 30 minutes from full), a loop or a long turn crosses its line |
 | `budgetUsd` | `0` | Session budget in USD; `0` turns it off |
+| `dailyBudgetUsd` | `0` | Budget for a calendar day across sessions, alerting at 80% and 100%; `0` turns it off |
+| `longTurnMin` | `10` | Alert when one turn runs longer than this many minutes; `0` turns it off |
+| `quietHours` | empty | Hours with no toasts, such as `22-7` (local time). Alerts still go to the log |
 | `guard` | `true` | Heat guard on or off |
 | `maxTempC` | `80` | CPU temperature limit for the heat guard |
 | `minBatteryPct` | `20` | Battery floor for the heat guard, while discharging |
@@ -269,7 +306,7 @@ flowchart LR
 <p align="center"><img src="docs/art/spec.svg" alt="Specifications: no network, no model calls, no files written, no processes, zero dependencies, one timer" width="880"></p>
 
 - **No network, no model calls.** The context breakdown uses the engine's local estimate, which sends nothing.
-- **Read-only on your machine.** It reads `/sys/class/thermal`, `/sys/class/power_supply`, `/sys/devices/system/cpu/online`, `/proc/loadavg` and `/proc/meminfo`, and writes nothing.
+- **Read-only on your machine.** It reads `/sys/class/thermal`, `/sys/class/power_supply`, `/sys/devices/system/cpu/online`, `/proc/loadavg`, `/proc/meminfo` and the project's `.git/HEAD` (for the branch name), and writes nothing. It runs no `git` command.
 - **Local memory only.** Across sessions it keeps four numbers (sessions, turns, calls and cost) in total and for each of the last 60 days. They live in Claude Code's own plugin store. Tool results are measured for length only; their text is never kept.
 - **Fail-open.** If any hook faults, it passes the event on unchanged. The heat guard is the only part that can refuse anything: a Bash command that matches the heavy pattern, while the machine is hot or low on battery.
 - **Escaped drawing.** Every path, command and agent name passes through a single escaping function before it reaches SVG, and SVG renders in image mode, where scripts don't run.
@@ -324,7 +361,7 @@ The loop watch saw the same call three times in a row (say, `npm test` with noth
 </details>
 
 **On the bench next:**
-- **Git awareness:** branch, dirty files and lines changed.
+- **Git changes:** dirty files and lines changed, if it can be done without starting a process.
 - **Background jobs:** a watch on dev servers and watchers left running.
 - **Cache warmth:** how long the prompt cache stays warm after a turn.
 - **Vitals for macOS and Windows.**
