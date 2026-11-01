@@ -1,6 +1,6 @@
 {
   "name": "embermeter",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Embermeter: an animated live instrument panel for Claude Code, built for VS Code. Health grade, context composition and runway to auto-compact, token and cache analytics, cost burn and budget, rate-limit countdowns, particle flow diagram, tool leaderboard with p95, file heatmap, subagent swimlanes, permission gate, laptop vitals with a heat guard, and lifetime stats",
   "author": { "name": "X-Saikat-93", "url": "https://github.com/X-Saikat-93" },
   "homepage": "https://github.com/X-Saikat-93/embermeter",
@@ -11,10 +11,10 @@
   "userConfig": {
     "theme": {
       "title": "Theme",
-      "description": "night: warm ink instrument panel; day: plain paper; washi: rice paper, sumi ink and a vermilion sun. Each graphic paints its own ground, so any of them reads on any editor theme",
+      "description": "washi: rice paper, sumi ink and a vermilion sun; night: warm ink instrument panel; day: plain paper. Each graphic paints its own ground, so any of them reads on any editor theme",
       "type": "string",
-      "options": ["night", "day", "washi"],
-      "default": "night"
+      "options": ["washi", "night", "day"],
+      "default": "washi"
     },
     "motion": {
       "title": "Motion",
