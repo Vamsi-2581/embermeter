@@ -1,0 +1,6 @@
+{
+  "name": "embermeter",
+  "owner": { "name": "X-Saikat-93" },
+  "description": "Embermeter: an animated live dashboard for Claude Code with context forecasting, cost burn, tool analytics, subagent swimlanes and a laptop heat guard",
+  "plugins": [{ "name": "embermeter", "source": "./" }]
+}
