@@ -1,0 +1,59 @@
+name: Bug report
+description: Something in the pane is wrong, missing or broken
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. For security issues, please don't open an issue: see SECURITY.md.
+        Please remove file paths, commands or prompts you don't want public before you paste them.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open /embermeter
+        2. Run a turn that ...
+        3. The Tools tab shows ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Embermeter version
+      placeholder: '1.0.0'
+    validations:
+      required: true
+  - type: input
+    id: cc
+    attributes:
+      label: Claude Code version
+      description: Output of `claude --version`
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options: [VS Code, Desktop app, Terminal, Other]
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Linux, macOS, Windows]
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshot or `/embermeter report`
+      description: A screenshot of the pane, or the report, helps a lot.
