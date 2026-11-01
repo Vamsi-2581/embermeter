@@ -151,7 +151,8 @@ const variants = [
   ['-narrow', 'washi', 50],
 ] as const
 for (const [suffix, theme, cols] of variants) {
-  const c = parseConfig({ budgetUsd: 5, theme, commandPrefix: 'rtk', threads: 16 })
+  // Reduced motion: eases only, no endless loops, so an open README tab stops drawing once it settles.
+  const c =parseConfig({ budgetUsd: 5, theme, commandPrefix: 'rtk', threads: 16, motion: 'reduced' })
   const D = draw.drawContext(c, null, cols)
   const pages: Record<string, string> = {
     header: draw.header(D, b, c),
