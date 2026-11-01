@@ -3,13 +3,16 @@ import type { Register } from 'claude-code'
 
 import type { Agent, Board, Call, CallStatus, Ctx, Lifetime, Tab, Vitals } from '../types'
 import {
+  addDay,
   compacted,
   countCpus,
+  dayKey,
   describe,
   dur,
   emptyBoard,
   endAgent,
   endTurn,
+  estTokens,
   finishCall,
   health,
   kfmt,
@@ -32,17 +35,18 @@ import {
   withVitals,
 } from './core'
 import type { Cfg } from './core'
-import { agents as drawAgents, contextPage, drawContext, files as drawFiles, header, overview, strip, system, tools as drawTools } from './draw'
+import { agents as drawAgents, contextPage, drawContext, files as drawFiles, header, overview, spend, strip, system, tools as drawTools } from './draw'
 
 const PANE = 'embermeter'
 const TABS: { id: Tab; label: string; key: string }[] = [
   { id: 'overview', label: 'Overview', key: '1' },
   { id: 'context', label: 'Context', key: '2' },
-  { id: 'tools', label: 'Tools', key: '3' },
-  { id: 'files', label: 'Files', key: '4' },
-  { id: 'agents', label: 'Agents', key: '5' },
-  { id: 'system', label: 'System', key: '6' },
-  { id: 'log', label: 'Log', key: '7' },
+  { id: 'spend', label: 'Spend', key: '3' },
+  { id: 'tools', label: 'Tools', key: '4' },
+  { id: 'files', label: 'Files', key: '5' },
+  { id: 'agents', label: 'Agents', key: '6' },
+  { id: 'system', label: 'System', key: '7' },
+  { id: 'log', label: 'Log', key: '8' },
 ]
 
 const boardAtom = atom({ plugin: 'embermeter', key: 'board' } as const, emptyBoard())
@@ -204,7 +208,7 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'embermeter',
-      description: 'Embermeter dashboard: open, close, report, copy, reset, or a tab (overview context tools files agents system log)',
+      description: 'Embermeter dashboard: open, close, report, copy, reset, or a tab (overview context spend tools files agents system log)',
       argumentHint: '[open|close|report|copy|reset|<tab>]',
     })
     const fresh = (await get($)).startedAt === 0
@@ -212,7 +216,7 @@ export const register: Register = (on, options) => {
       const u = await $.session.usage().catch(() => null)
       const start = u?.startedAt ?? (await $.clock.now())
       await set($, () => emptyBoard(start))
-      await saveLife($, l => ({ ...l, sessions: l.sessions + 1 }))
+      await saveLife($, l => addDay({ ...l, sessions: l.sessions + 1 }, dayKey(start), { sessions: 1 }))
     } else {
       await saveLife($, l => l)
     }
@@ -271,7 +275,8 @@ export const register: Register = (on, options) => {
       const t = b.turns[b.turns.length - 1]
       const tok = t?.tokens ? ` · ${kfmt(t.tokens.output)} out` : ''
       await note($, 'main', `${e.reason} · ${dur(t?.ms)} · ${t?.tools ?? 0} tools${tok}${t?.usd != null ? ` · ${money(t.usd)}` : ''}`, e.reason === 'answer' ? 'done' : 'error')
-      await saveLife($, l => ({ ...l, turns: l.turns + 1, calls: l.calls + (t?.tools ?? 0), usd: l.usd + (t?.usd ?? 0) }))
+      const add = { turns: 1, calls: t?.tools ?? 0, usd: t?.usd ?? 0 }
+      await saveLife($, l => addDay({ ...l, turns: l.turns + add.turns, calls: l.calls + add.calls, usd: l.usd + add.usd }, dayKey(now), add))
       await refreshComp($, true)
       await raise($)
     } else {
@@ -318,7 +323,7 @@ export const register: Register = (on, options) => {
     const ran = await next(e)
     const status: CallStatus = ran.deny !== undefined ? 'denied' : ran.isError === true ? 'fail' : 'ok'
     const end = await $.clock.now()
-    await set($, b => finishCall(b, call.id, status, end - at))
+    await set($, b => finishCall(b, call.id, status, end - at, estTokens((ran as any).text)))
     if (status === 'fail') await note($, call.tool, `failed · ${call.detail}`, 'error')
     return ran
   }).catch(($, e, next) => next(e)) // fail open: a dashboard fault never blocks a tool
@@ -382,20 +387,17 @@ export const register: Register = (on, options) => {
     // Surfaces without Svg (the terminal) get the same data as text.
     const picture = (source: string, alt: string) => (Svg ? <Svg source={source} alt={alt} /> : <Text>{alt}</Text>)
 
-    const page =
-      tab === 'overview'
-        ? picture(overview(D, b, cfg), `Overview · ${statusText(b)}`)
-        : tab === 'context'
-          ? picture(contextPage(D, b), `Context · ${kfmt(b.ctx?.tokens)} of ${kfmt(b.ctx?.window)}`)
-          : tab === 'tools'
-            ? picture(drawTools(D, b), 'Tool leaderboard')
-            : tab === 'files'
-              ? picture(drawFiles(D, b), 'File heatmap')
-              : tab === 'agents'
-                ? picture(drawAgents(D, b), 'Subagent swimlanes')
-                : tab === 'system'
-                  ? picture(system(D, b, cfg), 'Machine vitals and guardrails')
-                  : null
+    // Each tab's picture, drawn only for the tab on show; the log tab is text alone.
+    const pages: Partial<Record<Tab, () => any>> = {
+      overview: () => picture(overview(D, b, cfg), `Overview · ${statusText(b)}`),
+      context: () => picture(contextPage(D, b), `Context · ${kfmt(b.ctx?.tokens)} of ${kfmt(b.ctx?.window)}`),
+      spend: () => picture(spend(D, b, cfg, life), `Spend · ${money(b.ctx?.usd)} this session`),
+      tools: () => picture(drawTools(D, b), 'Tool leaderboard'),
+      files: () => picture(drawFiles(D, b), 'File heatmap'),
+      agents: () => picture(drawAgents(D, b), 'Subagent swimlanes'),
+      system: () => picture(system(D, b, cfg), 'Machine vitals and guardrails'),
+    }
+    const page = pages[tab]?.() ?? null
 
     return (
       <Box flexDirection="column" gap="sm">
@@ -486,7 +488,7 @@ export const register: Register = (on, options) => {
 
         {life && (
           <Text color="subtle">
-            All time · {life.sessions} sessions · {money(life.usd)} · {life.turns} turns · {life.calls} tool calls
+            All time · {life.sessions} sessions · {money(life.usd)} · {life.turns} turns · {life.calls} tool calls · today {money(life.days?.[dayKey(b.now)]?.usd ?? 0)}
           </Text>
         )}
       </Box>
