@@ -61,6 +61,6 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the data flow.
 
 1. Move *Unreleased* in `CHANGELOG.md` to the new version.
 2. Bump `version` in `.claude-plugin/plugin.json`.
-3. Tag `vX.Y.Z` and publish a GitHub release with the changelog section.
+3. Push a `vX.Y.Z` tag. The `release` workflow checks that the changelog section and the version match, then publishes the GitHub release with that section as its notes.
 
 By contributing you agree your work is released under the [MIT License](LICENSE), and you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
