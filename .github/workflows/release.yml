@@ -1,0 +1,30 @@
+name: release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Notes from the changelog
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" 'index($0, "## [" v "]") == 1 {on=1; next} on && /^## \[/ {exit} on' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "CHANGELOG.md has no section for $version"; exit 1; }
+          grep -q "\"version\": \"$version\"" .claude-plugin/plugin.json || { echo ".claude-plugin/plugin.json is not at $version"; exit 1; }
+          printf '\nInstall or update:\n\n```\n/plugin install embermeter --marketplace %s\n```\n' "$GITHUB_REPOSITORY" >> notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "Embermeter ${GITHUB_REF_NAME#v}" --notes-file notes.md --verify-tag
