@@ -1,0 +1,87 @@
+{
+  "name": "embermeter",
+  "version": "1.0.0",
+  "description": "Embermeter: an animated live instrument panel for Claude Code, built for VS Code. Health grade, context composition and runway to auto-compact, token and cache analytics, cost burn and budget, rate-limit countdowns, particle flow diagram, tool leaderboard with p95, file heatmap, subagent swimlanes, permission gate, laptop vitals with a heat guard, and lifetime stats",
+  "author": { "name": "X-Saikat-93", "url": "https://github.com/X-Saikat-93" },
+  "homepage": "https://github.com/X-Saikat-93/embermeter",
+  "repository": "https://github.com/X-Saikat-93/embermeter",
+  "license": "MIT",
+  "keywords": ["claude-code", "claude-code-mod", "dashboard", "vscode", "observability", "context", "cost", "subagents", "thermal"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "theme": {
+      "title": "Theme",
+      "description": "night: warm ink instrument panel; day: paper. Each graphic paints its own ground, so either reads on any editor theme",
+      "type": "string",
+      "options": ["night", "day"],
+      "default": "night"
+    },
+    "motion": {
+      "title": "Motion",
+      "description": "smooth: eased transitions plus live particles and pulses; reduced: eased transitions only; off: static",
+      "type": "string",
+      "options": ["smooth", "reduced", "off"],
+      "default": "smooth"
+    },
+    "openOnStart": {
+      "title": "Open on start",
+      "description": "Open the Embermeter pane when a session starts",
+      "type": "boolean",
+      "default": true
+    },
+    "band": {
+      "title": "Strip above the prompt",
+      "description": "Show the compact animated strip (grade, context, temp, battery, cost) above the prompt",
+      "type": "boolean",
+      "default": true
+    },
+    "alerts": {
+      "title": "Alerts",
+      "description": "Toast once when context, temperature, budget or a rate limit crosses its threshold",
+      "type": "boolean",
+      "default": true
+    },
+    "budgetUsd": {
+      "title": "Session budget (USD)",
+      "description": "Cost budget for one session; 0 turns the budget ring and alerts off",
+      "type": "number",
+      "default": 0
+    },
+    "guard": {
+      "title": "Heat guard",
+      "description": "Refuse heavy Bash jobs while the laptop is over the temperature limit or low on battery",
+      "type": "boolean",
+      "default": true
+    },
+    "maxTempC": {
+      "title": "Temperature limit (C)",
+      "description": "Above this CPU temperature the heat guard pauses heavy jobs",
+      "type": "number",
+      "default": 80
+    },
+    "minBatteryPct": {
+      "title": "Minimum battery (%)",
+      "description": "Below this, while discharging, the heat guard pauses heavy jobs",
+      "type": "number",
+      "default": 20
+    },
+    "heavyPattern": {
+      "title": "Heavy command pattern",
+      "description": "Regular expression for the Bash commands the heat guard treats as heavy; empty uses the built-in list",
+      "type": "string",
+      "default": ""
+    },
+    "commandPrefix": {
+      "title": "Command prefix to track",
+      "description": "Bash commands are scored for starting with this word (for example rtk); empty turns the compliance meter off",
+      "type": "string",
+      "default": ""
+    },
+    "threads": {
+      "title": "CPU threads",
+      "description": "Used to scale the load gauge; 0 detects it from the machine",
+      "type": "number",
+      "default": 0
+    }
+  }
+}
