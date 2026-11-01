@@ -11,9 +11,9 @@
   "userConfig": {
     "theme": {
       "title": "Theme",
-      "description": "night: warm ink instrument panel; day: paper. Each graphic paints its own ground, so either reads on any editor theme",
+      "description": "night: warm ink instrument panel; day: plain paper; washi: rice paper, sumi ink and a vermilion sun. Each graphic paints its own ground, so any of them reads on any editor theme",
       "type": "string",
-      "options": ["night", "day"],
+      "options": ["night", "day", "washi"],
       "default": "night"
     },
     "motion": {
