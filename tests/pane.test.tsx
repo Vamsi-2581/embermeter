@@ -51,3 +51,15 @@ test('the tools tab lists the call', async ($, on) => {
   expect(row).toBeTruthy()
   await ui.unmount()
 })
+
+test('the spend tab opens on every surface', async ($, on) => {
+  engine(on)
+  await $.session.start({ cwd: '/', surface: 'vscode', isInteractive: true })
+
+  for (const surface of ['vscode', 'terminal'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    await ui.press({ key: 'tab-spend' })
+    expect((await ui.find({ key: 'tab-spend' }))?.text).toBe('▸ Spend')
+    await ui.unmount()
+  }
+})
