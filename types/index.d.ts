@@ -28,7 +28,8 @@ export type Call = {
   ms: number | null
 }
 
-export type ToolStat = { n: number; ok: number; fail: number; denied: number; totalMs: number; durs: number[] }
+// `out`: estimated tokens the tool's results fed back into the context (absent on boards stored before it existed).
+export type ToolStat = { n: number; ok: number; fail: number; denied: number; totalMs: number; durs: number[]; out?: number }
 
 export type FileStat = { read: number; edit: number; write: number; last: number }
 
@@ -72,7 +73,9 @@ export type Composition = {
   at: number
 }
 
-export type LogKind = 'info' | 'done' | 'warn' | 'error'
+export type ModelStat = { turns: number; usd: number; input: number; output: number }
+
+export type LogKind ='info' | 'done' | 'warn' | 'error'
 
 export type LogLine = { at: number; who: string; text: string; kind: LogKind }
 
@@ -91,6 +94,7 @@ export type Board = {
   costAtStart: number | null
   turns: Turn[]
   turnCount: number
+  models: Record<string, ModelStat>
   calls: Call[]
   stats: Record<string, ToolStat>
   files: Record<string, FileStat>
@@ -107,9 +111,12 @@ export type Board = {
   alerts: string[]
 }
 
-export type Tab = 'overview' | 'context' | 'tools' | 'files' | 'agents' | 'system' | 'log'
+export type Tab = 'overview' | 'context' | 'spend' | 'tools' | 'files' | 'agents' | 'system' | 'log'
 
-export type Lifetime = { sessions: number; usd: number; turns: number; calls: number }
+export type DayStat = { sessions: number; usd: number; turns: number; calls: number }
+
+// `days`: totals per local date (YYYY-MM-DD), the most recent 60 kept.
+export type Lifetime = { sessions: number; usd: number; turns: number; calls: number; days?: Record<string, DayStat> }
 
 declare module 'claude-code' {
   interface PluginState {
