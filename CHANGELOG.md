@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-01
+
 ### Added
 - **Rate-limit forecast:** each window shows when it fills at the current pace, if that comes before its reset, with an alert 30 minutes out.
 - **Compaction warning** two turns before auto-compact.
@@ -60,6 +62,7 @@ First public release.
 ### Security
 - No network, no file writes, no processes. Every hook fails open. All SVG text is escaped.
 
-[Unreleased]: https://github.com/X-Saikat-93/embermeter/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/X-Saikat-93/embermeter/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/X-Saikat-93/embermeter/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/X-Saikat-93/embermeter/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/X-Saikat-93/embermeter/releases/tag/v1.0.0
