@@ -48,9 +48,11 @@ test('config falls back to safe defaults and rejects a bad pattern', async () =>
   expect(c.prefix).toBe('rtk')
 })
 
-test('the theme accepts washi and falls back to night', async () => {
+test('the theme defaults to washi and accepts night and day', async () => {
   expect(parseConfig({ theme: 'washi' }).theme).toBe('washi')
-  expect(parseConfig({ theme: 'neon' }).theme).toBe('night')
+  expect(parseConfig({ theme: 'neon' }).theme).toBe('washi')
+  expect(parseConfig({}).theme).toBe('washi')
+  expect(parseConfig({ theme: 'night' }).theme).toBe('night')
 })
 
 test('a stored board from an older version is filled in', async () => {
