@@ -143,7 +143,7 @@ The panel has eight tabs, and keys `1`–`8` switch between them. It opens on th
     <td><img src="docs/system.svg" alt="System tab"><br><sub><b>System:</b> CPU temperature, battery, memory, load, thermal trend, guardrails</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/overview-night.svg" alt="Night theme"><br><sub><b>Night:</b> warm ink, the default, for dark editors</sub></td>
+    <td><img src="docs/overview-night.svg" alt="Night theme"><br><sub><b>Night:</b> warm ink, for dark editors</sub></td>
     <td><img src="docs/overview-day.svg" alt="Day theme"><br><sub><b>Day:</b> plain paper, for light editors</sub></td>
   </tr>
 </table>
@@ -158,7 +158,7 @@ A slim strip rides above the prompt, and the status line carries a one-line summ
 
 **On the design**
 
-- **An instrument palette, not neon.** *Washi* (shown here) is rice paper and sumi ink with a vermilion sun, matcha for good and indigo for neutral. *Night* is warm ink with amber; *Day* is plain paper. Each has one signal colour, and everything else stays quiet so the signal stands out.
+- **An instrument palette, not neon.** *Washi* (the default, shown here) is rice paper and sumi ink with a vermilion sun, matcha for good and indigo for neutral. *Night* is warm ink with amber; *Day* is plain paper. Each has one signal colour, and everything else stays quiet so the signal stands out.
 - **Motion that means something.** Readings ease from their last value. Particles, pulses and breathing appear only on stages that are working, and stop when the work stops. `motion: reduced` or `off` calms it all.
 - **Responsive.** Under about 76 columns, every page re-flows to one column. Gauges go 2×2 and the flow becomes a vertical rail (right).
 - **Steady numbers.** Tabular figures, so values don't jitter as they tick.
@@ -204,7 +204,7 @@ A slim strip rides above the prompt, and the status line carries a one-line summ
 
 | Option | Default | Meaning |
 |---|---|---|
-| `theme` | `night` | `washi` (rice paper, sumi and vermilion), `night` (warm ink) or `day` (plain paper) |
+| `theme` | `washi` | `washi` (rice paper, sumi and vermilion), `night` (warm ink) or `day` (plain paper) |
 | `motion` | `smooth` | `smooth`: transitions and live animation · `reduced`: transitions only · `off`: static |
 | `openOnStart` | `true` | Open the panel when a session starts |
 | `band` | `true` | Show the strip above the prompt |
