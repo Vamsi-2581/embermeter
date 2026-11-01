@@ -42,28 +42,29 @@ for (let i = 0; i < 40; i++) {
   b = withVitals(b, { tempC: 52 + Math.round(14 * Math.sin(i / 5) + i / 4), pct: 76, discharging: false, load1: 3.4, memPct: 61 }, now)
 }
 
+// The last column is the estimated size of the result the model read back, in tokens.
 const calls = [
-  ['Read', '/src/app/page.tsx', 'ok', 120],
-  ['Grep', 'useSession', 'ok', 340],
-  ['Edit', '/src/lib/http.ts', 'ok', 210],
-  ['Bash', 'rtk npm test', 'ok', 18400],
-  ['Edit', '/src/lib/http.ts', 'ok', 190],
-  ['Read', '/src/store/session.ts', 'ok', 90],
-  ['Bash', 'git status', 'ok', 600],
-  ['Write', '/src/ui/Chart.tsx', 'ok', 260],
-  ['Bash', 'rtk tsc', 'fail', 9200],
-  ['Edit', '/server/router.ts', 'ok', 230],
-  ['WebFetch', 'https://docs.example.dev', 'ok', 2400],
-  ['Glob', '**/*.test.ts', 'ok', 80],
-  ['Bash', 'rtk git diff', 'ok', 700],
-  ['Edit', '/src/ui/Chart.tsx', 'ok', 310],
-  ['Read', '/db/schema.sql', 'ok', 110],
+  ['Read', '/src/app/page.tsx', 'ok', 120, 3900],
+  ['Grep', 'useSession', 'ok', 340, 820],
+  ['Edit', '/src/lib/http.ts', 'ok', 210, 140],
+  ['Bash', 'rtk npm test', 'ok', 18400, 2600],
+  ['Edit', '/src/lib/http.ts', 'ok', 190, 120],
+  ['Read', '/src/store/session.ts', 'ok', 90, 2700],
+  ['Bash', 'git status', 'ok', 600, 310],
+  ['Write', '/src/ui/Chart.tsx', 'ok', 260, 60],
+  ['Bash', 'rtk tsc', 'fail', 9200, 1800],
+  ['Edit', '/server/router.ts', 'ok', 230, 150],
+  ['WebFetch', 'https://docs.example.dev', 'ok', 2400, 5200],
+  ['Glob', '**/*.test.ts', 'ok', 80, 240],
+  ['Bash', 'rtk git diff', 'ok', 700, 1400],
+  ['Edit', '/src/ui/Chart.tsx', 'ok', 310, 130],
+  ['Read', '/db/schema.sql', 'ok', 110, 4100],
 ] as const
-calls.forEach(([tool, detail, status, ms], i) => {
+calls.forEach(([tool, detail, status, ms, outTok], i) => {
   const isFile = tool === 'Read' || tool === 'Edit' || tool === 'Write'
   const input = isFile ? { file: detail } : tool === 'Bash' ? { command: detail } : {}
   b = startCall(b, { id: `c${i}`, tool, detail, status: 'run', agent: false, at: T0 + i * 60_000, ms: null }, input, 'rtk')
-  b = finishCall(b, `c${i}`, status, ms)
+  b = finishCall(b, `c${i}`, status, ms, outTok)
 })
 b = startCall(b, { id: 'live', tool: 'Bash', detail: 'rtk npm run build', status: 'run', agent: false, at: now - 4000, ms: null }, { command: 'rtk npm run build' }, 'rtk')
 
@@ -73,18 +74,27 @@ b = spawnAgent(b, { id: 'a3', type: 'general-purpose', desc: 'Write the migratio
 b = spawnAgent(b, { id: 'a4', type: 'code-reviewer', desc: 'Review the diff', model: 'opus', status: 'fail', startedAt: T0 + 24 * 60_000, endedAt: T0 + 27 * 60_000, tools: 4 })
 
 const turns = [42, 18, 95, 31, 64, 120, 22, 47, 88, 35, 54, 140, 26, 71]
+// Mostly the main model, with a cheaper one for quick turns.
+const modelOf = (i: number) => (i % 4 === 1 ? 'claude-sonnet-5-5' : i % 7 === 6 ? 'claude-haiku-5-5' : 'claude-opus-5-5')
+const sampleTurns = turns.map((s, i) => ({
+  at: i * 180_000,
+  ms: s * 1000,
+  usd: modelOf(i) === 'claude-opus-5-5' ? s / 600 : s / 2400,
+  tools: Math.round(s / 6),
+  ctxDelta: 3 + (i % 3),
+  reason: i === 9 ? 'error' : 'answer',
+  model: modelOf(i),
+  tokens: { input: 1200, output: s * 38, cacheRead: 52000, cacheWrite: 6100 },
+}))
+const models: Record<string, { turns: number; usd: number; input: number; output: number }> = {}
+for (const t of sampleTurns) {
+  const m = models[t.model] ?? { turns: 0, usd: 0, input: 0, output: 0 }
+  models[t.model] = { turns: m.turns + 1, usd: m.usd + t.usd, input: m.input + 59300, output: m.output + t.tokens.output }
+}
 b = {
   ...b,
-  turns: turns.map((s, i) => ({
-    at: i * 180_000,
-    ms: s * 1000,
-    usd: s / 600,
-    tools: Math.round(s / 6),
-    ctxDelta: 3 + (i % 3),
-    reason: i === 9 ? 'error' : 'answer',
-    model: 'claude-opus-5-5',
-    tokens: { input: 1200, output: s * 38, cacheRead: 52000, cacheWrite: 6100 },
-  })),
+  turns: sampleTurns,
+  models,
   tokens: { input: 16800, output: 31400, cacheRead: 728000, cacheWrite: 85400 },
   model: 'claude-opus-5-5',
   comp: {
@@ -124,11 +134,21 @@ b = {
   now,
 }
 
-// Night (the default) is what the README shows; day and a narrow pane are rendered too.
+// Thirty days of history for the Spend page: weekday work, quiet weekends, today in progress.
+let life = { sessions: 0, usd: 0, turns: 0, calls: 0 }
+for (let i = 29; i >= 0; i--) {
+  const day = new Date(now - i * 86_400_000)
+  const weekend = day.getDay() === 0 || day.getDay() === 6
+  const usd = weekend ? (i % 3 === 0 ? 0.6 : 0) : 1.2 + 2.6 * Math.abs(Math.sin(i * 1.7))
+  if (usd > 0) life = core.addDay(life, core.dayKey(day.getTime()), { sessions: 2, usd, turns: Math.round(usd * 14), calls: Math.round(usd * 60) })
+}
+
+// Washi is what the README shows, to match its art; night (the default) and day are rendered too, and a narrow pane.
 const variants = [
-  ['', 'night', 90],
+  ['', 'washi', 90],
+  ['-night', 'night', 90],
   ['-day', 'day', 90],
-  ['-narrow', 'night', 50],
+  ['-narrow', 'washi', 50],
 ] as const
 for (const [suffix, theme, cols] of variants) {
   const c = parseConfig({ budgetUsd: 5, theme, commandPrefix: 'rtk', threads: 16 })
@@ -137,6 +157,7 @@ for (const [suffix, theme, cols] of variants) {
     header: draw.header(D, b, c),
     overview: draw.overview(D, b, c),
     context: draw.contextPage(D, b),
+    spend: draw.spend(D, b, c, life),
     tools: draw.tools(D, b),
     files: draw.files(D, b),
     agents: draw.agents(D, b),
