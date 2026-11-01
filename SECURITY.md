@@ -33,7 +33,7 @@ Embermeter runs inside Claude Code, with the permissions Claude Code grants a mo
 | Area | Behaviour |
 |---|---|
 | Network | None. No `fetch`, no sockets, no model calls. The context breakdown uses the engine's local estimate. |
-| File system | Reads only `/sys/class/thermal/*`, `/sys/class/power_supply/BAT0/*`, `/sys/devices/system/cpu/online`, `/proc/loadavg` and `/proc/meminfo`. Writes nothing. |
+| File system | Reads only `/sys/class/thermal/*`, `/sys/class/power_supply/BAT0/*`, `/sys/devices/system/cpu/online`, `/proc/loadavg`, `/proc/meminfo`, and the project's `.git/HEAD` (or the `.git` file of a worktree) for the branch name. Writes nothing, and runs no `git` command. |
 | Processes | Starts none. |
 | Storage | Session state lives in Claude Code's session state. Lifetime totals (session count, turns, calls, cost), and the same four totals for each of the last 60 calendar days, are kept in Claude Code's plugin store on your machine. Prompts, file contents and command output are never stored across sessions. Tool results are measured for their length only; their text is not kept. |
 | Rendering | Every string drawn into SVG goes through one escaping function (`esc` in `hooks/draw.ts`). The SVG renders in image mode, where scripts don't run. |
