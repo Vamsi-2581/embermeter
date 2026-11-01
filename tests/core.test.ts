@@ -2,6 +2,12 @@ import { expect, test } from 'claude-code/testing'
 
 import {
   addDay,
+  fileWeight,
+  gitDirOf,
+  isQuiet,
+  limitEta,
+  parseHead,
+  weekCompare,
   budgetRunway,
   cacheHit,
   ctxWeight,
@@ -13,6 +19,7 @@ import {
   compactPct,
   throughput,
   toComposition,
+  compacted,
   compliance,
   countCpus,
   emptyBoard,
@@ -273,4 +280,93 @@ test('daily totals add up, keep 60 days, and fill gaps with zero', async () => {
   expect(days[29]?.turns).toBe(3)
   expect(days[0]?.key).toBe('2026-10-03')
   expect(days[0]?.turns).toBe(0)
+})
+
+test('a rate limit filling at a steady pace gets a time to full, unless it resets first', async () => {
+  const at = (min: number) => min * 60_000
+  const lim = (pct: number, resetsAt: string | null) => ({ tokens: 1, window: 2, pct: 10, usd: 0, limits: [{ kind: 'five_hour', pct, resetsAt }] })
+  const far = new Date(at(600)).toISOString()
+  let b = emptyBoard(0)
+  b = withCtx({ ...b, now: at(0) }, lim(40, far))
+  b = withCtx({ ...b, now: at(10) }, lim(50, far))
+  // 10% per 10 minutes, 50% to go: 50 minutes.
+  expect(limitEta(b)[0]?.etaMs).toBe(at(50))
+  expect(newAlerts(b, cfg).some(a => a.key === 'limit-eta-five_hour')).toBe(false)
+  b = withCtx({ ...b, now: at(40) }, lim(80, far))
+  expect(newAlerts(b, cfg).find(a => a.key === 'limit-eta-five_hour')?.text).toBe('Rate limit five hour full in ~20m00s at this pace')
+  // A window that resets before it fills has no time to full.
+  const soon = new Date(at(45)).toISOString()
+  let r = emptyBoard(0)
+  r = withCtx({ ...r, now: at(0) }, lim(40, soon))
+  r = withCtx({ ...r, now: at(10) }, lim(50, soon))
+  expect(limitEta(r)[0]?.etaMs).toBe(null)
+  // Readings under five minutes apart are too few to call a pace.
+  let q = emptyBoard(0)
+  q = withCtx({ ...q, now: at(0) }, lim(40, far))
+  q = withCtx({ ...q, now: at(2) }, lim(45, far))
+  expect(limitEta(q)[0]?.etaMs).toBe(null)
+})
+
+test('the compaction warning fires two turns out and re-arms after a compaction', async () => {
+  let b = emptyBoard(0)
+  b = { ...b, comp: { model: '', total: 0, max: 100, compactAt: 80, autoCompact: true, slices: [], memory: [], mcp: [], at: 0 } }
+  b = { ...b, ctx: ctx(70), turns: [5, 5, 5].map(d => ({ at: 0, ms: 1, usd: null, tools: 0, ctxDelta: d, reason: 'answer', model: '', tokens: null })) }
+  expect(newAlerts(b, cfg).find(a => a.key === 'ctx-runway')?.text).toBe('Auto-compact in ~2 turns: consider /compact now')
+  const raised = { ...b, alerts: ['ctx-runway'] }
+  expect(newAlerts(raised, cfg).some(a => a.key === 'ctx-runway')).toBe(false)
+  expect(compacted(raised).alerts).toEqual([])
+})
+
+test('the daily budget, long turns and quiet hours', async () => {
+  const noon = new Date(2026, 10, 1, 12).getTime()
+  const day = parseConfig({ dailyBudgetUsd: 10 })
+  const b = { ...emptyBoard(0), now: noon }
+  expect(newAlerts(b, day, 7).length).toBe(0)
+  expect(newAlerts(b, day, 8.5).map(a => a.key)).toEqual(['day80:2026-11-01'])
+  expect(newAlerts(b, day, 12).map(a => a.key)).toEqual(['day80:2026-11-01', 'day100:2026-11-01'])
+
+  let t = startCall({ ...emptyBoard(0), running: true, turnStart: 0, turnCount: 3 }, { ...call('a', 'Bash'), detail: 'npm test' }, {}, '')
+  t = { ...t, now: 11 * 60_000 }
+  expect(newAlerts(t, cfg).find(a => a.key === 'long:3')?.text).toBe('Turn running 11m00s · last: Bash npm test')
+  expect(newAlerts(t, parseConfig({ longTurnMin: 0 })).some(a => a.key.startsWith('long'))).toBe(false)
+
+  const night = parseConfig({ quietHours: '22-7' })
+  expect(night.quiet).toEqual([22, 7])
+  expect(isQuiet(night, new Date(2026, 10, 1, 23).getTime())).toBe(true)
+  expect(isQuiet(night, new Date(2026, 10, 1, 6).getTime())).toBe(true)
+  expect(isQuiet(night, new Date(2026, 10, 1, 12).getTime())).toBe(false)
+  expect(isQuiet(parseConfig({ quietHours: '9-17' }), new Date(2026, 10, 1, 12).getTime())).toBe(true)
+  expect(parseConfig({ quietHours: 'later' }).quiet).toBe(null)
+  expect(parseConfig({ quietHours: '5-5' }).quiet).toBe(null)
+})
+
+test('tool results are credited to their file by the context they fed', async () => {
+  let b = emptyBoard(0)
+  b = finishCall(startCall(b, call('a', 'Read'), { file: '/db/schema.sql' }, ''), 'a', 'ok', 5, 4000)
+  b = finishCall(startCall(b, call('b', 'Read'), { file: '/db/schema.sql' }, ''), 'b', 'ok', 5, 2000)
+  b = finishCall(startCall(b, call('c', 'Read'), { file: '/src/a.ts' }, ''), 'c', 'ok', 5, 900)
+  b = finishCall(startCall(b, call('d', 'Edit'), { file: '/src/b.ts' }, ''), 'd', 'ok', 5, 0)
+  expect(fileWeight(b).map(f => [f.path, f.out, f.read])).toEqual([
+    ['/db/schema.sql', 6000, 2],
+    ['/src/a.ts', 900, 1],
+  ])
+  expect(report(b, cfg, null)).toContain('Heaviest files (est.): /db/schema.sql 6k')
+})
+
+test('the branch comes from .git/HEAD, and a worktree .git file names the git directory', async () => {
+  expect(parseHead('ref: refs/heads/feature/login\n')).toBe('feature/login')
+  expect(parseHead('3f2a9c1e0b7d4a6f8e9c1b2a3d4e5f6a7b8c9d0e')).toBe('3f2a9c1')
+  expect(parseHead(null)).toBe('')
+  expect(parseHead('garbage')).toBe('')
+  expect(gitDirOf('gitdir: /home/me/app/.git/worktrees/fix\n')).toBe('/home/me/app/.git/worktrees/fix')
+  expect(gitDirOf(null)).toBe(null)
+})
+
+test('the last seven days are compared with the seven before', async () => {
+  const noon = new Date(2026, 10, 14, 12).getTime()
+  let l: Lifetime = { sessions: 0, usd: 0, turns: 0, calls: 0 }
+  l = addDay(l, '2026-11-03', { usd: 10 })
+  l = addDay(l, '2026-11-10', { usd: 12 })
+  expect(weekCompare(l, noon)).toEqual({ week: 12, prior: 10, change: 0.2 })
+  expect(weekCompare(null, noon).change).toBe(null)
 })
