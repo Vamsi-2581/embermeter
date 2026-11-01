@@ -1,0 +1,5 @@
+* text=auto eol=lf
+*.png binary
+# Generated README images: collapse in diffs, skip in language stats.
+docs/*.svg linguist-generated=true -diff
+docs/art/*.svg linguist-generated=true -diff
