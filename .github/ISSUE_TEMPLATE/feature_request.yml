@@ -1,0 +1,21 @@
+name: Feature request
+description: A gauge, chart or signal you want to see
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What question should the panel answer?
+      description: Describe the decision you're trying to make, for example "should I compact now?"
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could it show that?
+      description: A sketch, a description, or a link to something similar.
+  - type: textarea
+    id: data
+    attributes:
+      label: Where does the data come from?
+      description: An engine event, session.usage, a /sys file... Leave it blank if you're not sure.
