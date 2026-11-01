@@ -1,18 +1,22 @@
 // SVG drawing: pure string builders, no `$`.
 // Motion is SMIL only (it runs in VS Code's image mode, no script): value changes ease in,
 // and loops (particles, breathing) run only while the stage they show is working.
-import type { Board, Limit } from '../types'
+import type { Board, Lifetime, Limit } from '../types'
 import type { Cfg, Motion, Theme } from './core'
 import {
+  budgetRunway,
   cacheHit,
   compactPct,
   compliance,
   costRate,
+  ctxWeight,
   dur,
   fileBoard,
   forecast,
   health,
   kfmt,
+  lastDays,
+  modelSplit,
   money,
   short,
   shortPath,
@@ -23,8 +27,8 @@ import {
 
 // ---------------------------------------------------------------- design tokens
 
-// Two instrument palettes: warm ink at night, paper by day. One signal color (amber),
-// muted semantics, no neon. Each SVG paints its own ground, so it reads on any editor theme.
+// Instrument palettes: warm ink at night, paper by day, and washi (rice paper, sumi ink, a vermilion sun).
+// One signal color each, muted semantics, no neon. Each SVG paints its own ground, so it reads on any editor theme.
 export type Pal = {
   ground: string
   panel: string
@@ -71,6 +75,22 @@ export const PALETTES: Record<Theme, Pal> = {
     sand: '#86703f',
     rust: '#ad412c',
     rose: '#8e5d58',
+  },
+  // Vermilion (shu) is the signal; matcha for good, indigo (ai) for neutral, deep crimson (beni) for trouble.
+  washi: {
+    ground: '#ebe2cf',
+    panel: '#f3ecdd',
+    line: '#d5c8ae',
+    grid: '#e2d7c1',
+    ink: '#1d2124',
+    sub: '#59544d',
+    faint: '#958b7c',
+    amber: '#cc3b2e',
+    sage: '#5d7848',
+    steel: '#34536b',
+    sand: '#97794c',
+    rust: '#86201b',
+    rose: '#b36d66',
   },
 }
 
@@ -517,6 +537,23 @@ export const contextPage = (D: Draw, b: Board) => {
   })
   y += (D.W >= 600 ? th : th + 34) + gap
 
+  // What tool results put back into the window, estimated from the text the model reads.
+  const weight = ctxWeight(b).slice(0, 6)
+  if (weight.length) {
+    const top = weight[0]?.out ?? 1
+    const wh = 40 + weight.length * 20
+    const mx = D.W >= 600 ? 150 : 110
+    parts.push(panel(D, 0, y, D.W, wh, 'Fed back by tools', `est. ${kfmt(weight.reduce((s, w) => s + w.out, 0))} tokens`))
+    weight.forEach((w, i) => {
+      const ry = y + 44 + i * 20
+      parts.push(txt(D, 14, ry, short(w.tool, D.W >= 600 ? 18 : 12), { size: 10.5, weight: 600, color: p.ink }))
+      parts.push(meter(D, mx, ry - 6, D.W - mx - 120, w.out / top, null, i === 0 ? p.amber : p.steel, 4))
+      parts.push(txt(D, D.W - 60, ry, kfmt(w.out), { size: 10, mono: true, anchor: 'end', color: p.ink }))
+      parts.push(txt(D, D.W - 14, ry, `${Math.round(w.share * 100)}%`, { size: 10, mono: true, anchor: 'end' }))
+    })
+    y += wh + gap
+  }
+
   // Memory files and MCP tools: the always-loaded weight in the window.
   if (cp && (cp.memory.length || cp.mcp.length)) {
     const mem = cp.memory.slice(0, 6)
@@ -557,8 +594,8 @@ export const tools = (D: Draw, b: Board) => {
   const rh = 26
   const h = 44 + Math.max(1, rows.length) * rh
   const barX = wide ? 128 : 100
-  const barW = wide ? 250 : 130
-  const parts: string[] = [panel(D, 0, 0, D.W, h, 'Tool leaderboard', wide ? 'calls · success · avg · p95' : 'calls · ok · p95')]
+  const barW = wide ? 200 : 130
+  const parts: string[] = [panel(D, 0, 0, D.W, h, 'Tool leaderboard', wide ? 'calls · ctx fed · success · avg · p95' : 'calls · ok · p95')]
   if (!rows.length) parts.push(txt(D, D.W / 2, 50, 'no tool calls yet', { size: 10, anchor: 'middle', color: p.faint }))
   const prev = D.prev?.stats ?? {}
   rows.forEach((r, i) => {
@@ -574,6 +611,7 @@ export const tools = (D: Draw, b: Board) => {
     if (r.okPct < 100 && r.okPct > 0) parts.push(`<rect x="${barX}" y="${y + 3}" width="${r1(Math.max(3, w * (r.okPct / 100)))}" height="8" rx="4" fill="${p.sage}"/>`)
     parts.push(txt(D, barX + barW + 10, y + 10, String(r.n), { size: 10, mono: true, color: p.ink }))
     if (wide) {
+      parts.push(txt(D, 400, y + 10, r.out ? kfmt(r.out) : '–', { size: 10, mono: true, anchor: 'end', color: p.steel }))
       parts.push(txt(D, 470, y + 10, `${r.okPct}%`, { size: 10, mono: true, anchor: 'end', color: r.okPct < 90 ? p.rust : p.sub }))
       parts.push(txt(D, 548, y + 10, dur(r.avg), { size: 10, mono: true, anchor: 'end' }))
     }
@@ -637,6 +675,108 @@ export const agents = (D: Draw, b: Board) => {
     parts.push(txt(D, D.W - 14, y + 12, `${a.tools}t · ${dur((a.endedAt ?? b.now) - a.startedAt)}`, { size: 9.5, mono: true, anchor: 'end' }))
   })
   return svg(D, h, parts.join(''))
+}
+
+export const spend = (D: Draw, b: Board, cfg: Cfg, life: Lifetime | null) => {
+  const p = D.p
+  const wide = D.W >= 600
+  const parts: string[] = []
+  let y = 0
+  const gap = 10
+  const r = costRate(b)
+  const left = budgetRunway(b, cfg)
+
+  // Cost waterfall: each turn's cost stacked on the running total, the budget as a red line.
+  const slots = wide ? 32 : 18
+  const turns = b.turns.filter(t => t.usd !== null).slice(-slots)
+  const spent = turns.reduce((s, t) => s + (t.usd ?? 0), 0)
+  const end = Math.max(b.ctx?.usd ?? 0, spent)
+  const start = end - spent
+  // The scale runs from what was spent before the window to the total, so each turn's step stays readable;
+  // the budget joins the scale only when it is close enough not to flatten the steps.
+  const budgetShown = cfg.budgetUsd > 0 && cfg.budgetUsd - start <= (end - start) * 1.6
+  const top = start + Math.max(end - start, budgetShown ? cfg.budgetUsd - start : 0, 0.0001) * 1.08
+  const ch = 92
+  const wh = ch + 58
+  const base = y + 34 + ch
+  const yOf = (usd: number) => base - ((usd - start) / (top - start)) * ch
+  parts.push(panel(D, 0, y, D.W, wh, 'Cost waterfall', left !== null ? `~${left} turns of budget left` : r.perTurn !== null ? `${money(r.perTurn)} / turn` : ''))
+  if (!turns.length) {
+    parts.push(txt(D, D.W / 2, y + 34 + ch / 2, 'no costed turns yet', { size: 10, anchor: 'middle', color: p.faint }))
+  } else {
+    const x0 = 14
+    const bw = (D.W - 28) / Math.max(turns.length, wide ? 16 : 10)
+    for (let i = 1; i < 4; i++) parts.push(`<line x1="${x0}" x2="${D.W - 14}" y1="${r1(base - (ch * i) / 4)}" y2="${r1(base - (ch * i) / 4)}" stroke="${p.grid}"/>`)
+    parts.push(`<line x1="${x0}" x2="${D.W - 14}" y1="${base}" y2="${base}" stroke="${p.line}"/>`)
+    if (start > 0) parts.push(txt(D, x0, base + 18, `from ${money(start)}`, { size: 9.5, mono: true, color: p.faint }))
+    const maxUsd = Math.max(0.0001, ...turns.map(t => t.usd ?? 0))
+    let cum = start
+    turns.forEach((t, i) => {
+      const usd = t.usd ?? 0
+      const x = x0 + i * bw
+      const yTop = yOf(cum + usd)
+      // Rust is kept for turns that ended badly; cost alone tops out at amber.
+      const col = t.reason !== 'answer' ? p.rust : level(D, (usd / maxUsd) * 0.75)
+      parts.push(`<rect x="${r1(x)}" y="${r1(yTop)}" width="${r1(Math.max(1, bw - 3))}" height="${r1(Math.max(1.5, yOf(cum) - yTop))}" rx="1.5" fill="${col}"/>`)
+      if (i < turns.length - 1) parts.push(`<line x1="${r1(x + bw - 3)}" x2="${r1(x + bw)}" y1="${r1(yTop)}" y2="${r1(yTop)}" stroke="${p.faint}" stroke-width="0.8"/>`)
+      cum += usd
+    })
+    if (budgetShown) {
+      const by = yOf(cfg.budgetUsd)
+      parts.push(`<line x1="${x0}" x2="${D.W - 14}" y1="${r1(by)}" y2="${r1(by)}" stroke="${p.rust}" stroke-dasharray="3 4" opacity="0.85"/>`)
+      parts.push(txt(D, D.W - 14, by - 4, `budget ${money(cfg.budgetUsd)}`, { size: 9, mono: true, anchor: 'end', color: p.rust }))
+    }
+    parts.push(txt(D, D.W / 2, base + 18, `${turns.length} turns · +${money(spent)}`, { size: 9.5, mono: true, anchor: 'middle' }))
+    parts.push(txt(D, D.W - 14, base + 18, `total ${money(end)}${cfg.budgetUsd > 0 && !budgetShown ? ` of ${money(cfg.budgetUsd)}` : ''}`, { size: 9.5, mono: true, anchor: 'end', color: p.ink }))
+  }
+  y += wh + gap
+
+  // Cost and volume per model.
+  const rows = modelSplit(b).slice(0, 5)
+  const mh = 40 + Math.max(1, rows.length) * 22
+  const mx = wide ? 220 : 130
+  const mw = wide ? 190 : D.W - mx - 84
+  parts.push(panel(D, 0, y, D.W, mh, 'By model', wide ? 'share of cost · turns · output · cost' : 'share · cost'))
+  if (!rows.length) parts.push(txt(D, D.W / 2, y + 48, 'no finished turns yet', { size: 10, anchor: 'middle', color: p.faint }))
+  rows.forEach((m, i) => {
+    const ry = y + 44 + i * 22
+    parts.push(txt(D, 14, ry, short(m.model, wide ? 28 : 16), { size: 10.5, weight: 600, color: p.ink, mono: true }))
+    parts.push(meter(D, mx, ry - 6, mw, m.share, null, [p.amber, p.steel, p.sage, p.sand, p.rose][i] ?? p.steel, 5))
+    if (wide) {
+      parts.push(txt(D, 470, ry, `${m.turns}t`, { size: 10, mono: true, anchor: 'end' }))
+      parts.push(txt(D, 548, ry, `${kfmt(m.output)} out`, { size: 10, mono: true, anchor: 'end' }))
+    }
+    parts.push(txt(D, D.W - 14, ry, money(m.usd), { size: 10, mono: true, anchor: 'end', color: p.ink }))
+  })
+  y += mh + gap
+
+  // The last 30 days from the lifetime store: one cell per day, tinted by spend.
+  if (life) {
+    const days = lastDays(life, b.now, 30)
+    const per = wide ? 30 : 15
+    const lines = Math.ceil(days.length / per)
+    const cw = (D.W - 28) / per
+    const cellH = wide ? 26 : 22
+    const dh = 34 + lines * (cellH + 4) + 22
+    const top30 = Math.max(0.0001, ...days.map(d => d.usd))
+    const active = days.filter(d => d.turns > 0).length
+    const sum = days.reduce((s, d) => s + d.usd, 0)
+    parts.push(panel(D, 0, y, D.W, dh, 'Last 30 days', `${money(sum)} · ${days.reduce((s, d) => s + d.turns, 0)} turns · ${active} active days`))
+    days.forEach((d, i) => {
+      const x = 14 + (i % per) * cw
+      const cy = y + 34 + Math.floor(i / per) * (cellH + 4)
+      const today = i === days.length - 1
+      const fill = d.usd > 0 ? `fill="${p.amber}" fill-opacity="${(0.15 + 0.85 * (d.usd / top30)).toFixed(2)}"` : `fill="${d.turns ? p.steel : p.grid}"${d.turns ? ' fill-opacity="0.35"' : ''}`
+      parts.push(`<rect x="${r1(x)}" y="${cy}" width="${r1(cw - 3)}" height="${cellH}" rx="3" ${fill}${today ? ` stroke="${p.amber}" stroke-width="1.2"` : ''}/>`)
+    })
+    const ly = y + 34 + lines * (cellH + 4) + 12
+    parts.push(txt(D, 14, ly, days[0]?.key.slice(5) ?? '', { size: 9, mono: true, color: p.faint }))
+    parts.push(txt(D, D.W - 14, ly, `today ${money(days[days.length - 1]?.usd ?? 0)}`, { size: 9, mono: true, anchor: 'end', color: p.amber }))
+    y += dh
+  } else {
+    y -= gap
+  }
+  return svg(D, y, parts.join(''))
 }
 
 export const system = (D: Draw, b: Board, cfg: Cfg) => {
