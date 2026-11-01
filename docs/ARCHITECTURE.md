@@ -50,6 +50,7 @@ Lists are capped, so a long session stays flat in memory:
 | agents | 40 |
 | durations per tool (for p95) | 50 |
 | models | one entry per model used |
+| rate-limit readings | 30 per window, reset when the window does |
 | days in the lifetime store | 60 |
 
 `normalize()` fills in any field missing from a board stored by an older version. That way, after an upgrade, a hot reload or a resumed session never crashes on an old shape.
@@ -70,7 +71,14 @@ Lifetime totals (`sessions`, `turns`, `calls`, `usd`) and the same four totals p
 | **Loop watch** | The same call (tool and input) three times back to back, or the same call failing three times in the last 12 calls. Subagent calls and calls without an input are left out, and so is Read from the back-to-back rule, because paging through one large file repeats the path. |
 | **Context fed by tools** | The text each tool's result handed the model, at about four characters per token. An estimate: good for ranking tools, not for billing. |
 | **Model split** | Each finished turn adds its cost, input (fresh + cache) and output tokens to the model that answered it. |
-| **Alerts** | Each threshold fires once. The context alerts re-arm after a compaction. Budget alerts fire at 50%, 80% and 100%. Each distinct loop alerts once. |
+| **Rate-limit forecast** | Each window's readings are kept while its reset time stays the same, and only when the reading moves. The pace is the first-to-last slope; a window gets a time to full only when it is filling, the readings span at least five minutes, and it fills before it resets. |
+| **Compaction warning** | Fires when the runway reaches two turns or fewer and auto-compact is on. |
+| **Daily budget** | Today's spend comes from the per-day totals in the lifetime store. The alert keys carry the date, so each day alerts afresh. |
+| **Long turn** | Fires once per turn when it runs past `longTurnMin`, naming the last tool call. |
+| **Heaviest files** | Each call keeps the file it worked on, so the size of its result is credited to that file. |
+| **Week over week** | Spend over the last seven calendar days against the seven before. |
+| **Branch** | Read from `.git/HEAD` under the project root at most every 15 seconds. A worktree's `.git` file is followed to the real git directory. |
+| **Alerts** | Each threshold fires once. The context alerts re-arm after a compaction. Budget alerts fire at 50%, 80% and 100%. Each distinct loop alerts once. In quiet hours the toast is held, but the alert is still logged. |
 
 ## Heat guard
 
