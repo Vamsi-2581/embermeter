@@ -5,6 +5,7 @@
 <p align="center">
   <a href="https://github.com/X-Saikat-93/embermeter/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/X-Saikat-93/embermeter/ci.yml?branch=main&style=flat-square&label=ci&labelColor=1a1917&color=93ae7e"></a>
   <a href="https://github.com/X-Saikat-93/embermeter/releases"><img alt="Release" src="https://img.shields.io/github/v/release/X-Saikat-93/embermeter?style=flat-square&labelColor=1a1917&color=e2a23c&display_name=tag"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/X-Saikat-93/embermeter"><img alt="OpenSSF Scorecard" src="https://img.shields.io/ossf-scorecard/github.com/X-Saikat-93/embermeter?style=flat-square&label=scorecard&labelColor=1a1917&color=93ae7e"></a>
   <img alt="Claude Code 2.1.287+" src="https://img.shields.io/badge/claude%20code-2.1.287%2B-e2a23c?style=flat-square&labelColor=1a1917">
   <img alt="Network: none" src="https://img.shields.io/badge/network-none-87a3b6?style=flat-square&labelColor=1a1917">
   <img alt="Dependencies: 0" src="https://img.shields.io/badge/dependencies-0-87a3b6?style=flat-square&labelColor=1a1917">
