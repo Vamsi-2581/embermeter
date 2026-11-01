@@ -5,6 +5,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+- **Rate-limit forecast:** each window shows when it fills at the current pace, if that comes before its reset, with an alert 30 minutes out.
+- **Compaction warning** two turns before auto-compact.
+- **Daily budget** (`dailyBudgetUsd`) across sessions, with alerts at 80% and 100%.
+- **Long-turn watch** (`longTurnMin`, default 10 minutes): a nudge when one turn runs long, naming its last tool call.
+- **Heaviest files:** the context each file's reads and edits fed, on the Context and Files tabs and in the report.
+- **Week over week** spend on the Spend tab and in the report.
+- **Git branch** in the header and the report, read from `.git/HEAD` without running git.
+- **Session card:** `/embermeter card` or the **Copy card** button copies a shareable SVG summary.
+- **Quiet hours** (`quietHours`, for example `22-7`): no toasts at night; alerts are still logged.
+- A release workflow: pushing a `vX.Y.Z` tag publishes the release from its changelog section.
+- A social preview image, `docs/social-preview.jpg`.
+
+### Changed
+- The README explains installing from the VS Code extension, whose chat has no `/plugin` command, and how to update or remove the plugin.
+
 ## [1.1.0] - 2026-11-01
 
 ### Added
