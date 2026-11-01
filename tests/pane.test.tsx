@@ -63,3 +63,16 @@ test('the spend tab opens on every surface', async ($, on) => {
     await ui.unmount()
   }
 })
+
+
+test('the spend tab shows its readings as text in the terminal', async ($, on) => {
+  engine(on)
+  await $.session.start({ cwd: '/', surface: 'vscode', isInteractive: true })
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'tab-spend' })
+  expect(await ui.find({ type: 'Text', text: 'Cost per model' })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /Last seven days/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /Budget runway/ })).toBeTruthy()
+  await ui.unmount()
+})
