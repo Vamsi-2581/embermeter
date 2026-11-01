@@ -143,7 +143,7 @@ for (let i = 29; i >= 0; i--) {
   if (usd > 0) life = core.addDay(life, core.dayKey(day.getTime()), { sessions: 2, usd, turns: Math.round(usd * 14), calls: Math.round(usd * 60) })
 }
 
-// Washi is what the README shows, to match its art; night (the default) and day are rendered too, and a narrow pane.
+// Washi, the default, is what the README shows; night and day are rendered too, and a narrow pane.
 const variants = [
   ['', 'washi', 90],
   ['-night', 'night', 90],
