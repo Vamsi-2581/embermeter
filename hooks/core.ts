@@ -1,5 +1,5 @@
 // Pure logic: no `$`, no I/O. Everything here is unit-tested in tests/core.test.ts.
-import type { Agent, AgentStatus, Board, Call, CallStatus, Composition, Ctx, DayStat, FileStat, Lifetime, LogKind, ModelStat, Tokens, ToolStat, Turn, Vitals } from '../types'
+import type { Agent, AgentStatus, Board, Call, CallStatus, Composition, Ctx, DayStat, FileStat, Lifetime, Limit, LimitTrack, LogKind, ModelStat, Tokens, ToolStat, Turn, Vitals } from '../types'
 
 export type Theme = 'night' | 'day' | 'washi'
 export type Motion = 'smooth' | 'reduced' | 'off'
@@ -13,6 +13,10 @@ export type Cfg = {
   heavy: RegExp
   prefix: string
   budgetUsd: number
+  dailyBudgetUsd: number
+  longTurnMin: number
+  // Hours with no toasts, [start, end) in local time; null when off.
+  quiet: [number, number] | null
   threads: number
   openOnStart: boolean
   band: boolean
@@ -44,6 +48,15 @@ export const countCpus = (online: string | null): number | null => {
   return n > 0 ? n : null
 }
 
+// "22-7" → [22, 7]: start and end hour, local time. Anything else turns quiet hours off.
+const parseQuiet = (v: unknown): [number, number] | null => {
+  const m = typeof v === 'string' ? /^\s*(\d{1,2})\s*-\s*(\d{1,2})\s*$/.exec(v) : null
+  if (!m) return null
+  const a = Number(m[1])
+  const z = Number(m[2]) % 24
+  return a <= 23 && a !== z ? [a, z] : null
+}
+
 export const parseConfig = (o: Readonly<Record<string, unknown>> = {}): Cfg => {
   const num = (v: unknown, d: number, lo: number, hi: number) => {
     const n = Number(v)
@@ -64,6 +77,9 @@ export const parseConfig = (o: Readonly<Record<string, unknown>> = {}): Cfg => {
     heavy,
     prefix: typeof o.commandPrefix === 'string' ? o.commandPrefix.trim() : '',
     budgetUsd: num(o.budgetUsd, 0, 0, 100000),
+    dailyBudgetUsd: num(o.dailyBudgetUsd, 0, 0, 100000),
+    longTurnMin: num(o.longTurnMin, 10, 0, 1440),
+    quiet: parseQuiet(o.quietHours),
     // 0 means detect from the machine; register.tsx fills it in.
     threads: num(o.threads, 0, 0, 512),
     openOnStart: o.openOnStart !== false,
@@ -90,6 +106,8 @@ export const emptyBoard = (startedAt = 0): Board => ({
   turns: [],
   turnCount: 0,
   models: {},
+  limitHist: {},
+  branch: '',
   calls: [],
   stats: {},
   files: {},
@@ -117,6 +135,8 @@ export const normalize = (b: unknown): Board => {
     gate: { ...base.gate, ...merged.gate },
     tokens: { ...base.tokens, ...merged.tokens },
     models: merged.models ?? {},
+    limitHist: merged.limitHist ?? {},
+    branch: merged.branch ?? '',
     turns: (merged.turns ?? []).map(t => ({ ...t, model: t.model ?? '', tokens: t.tokens ?? null })),
     activity: Array.isArray(merged.activity) && merged.activity.length ? merged.activity : [0],
   }
@@ -129,7 +149,7 @@ export const log = (b: Board, at: number, who: string, text: string, kind: LogKi
   log: tail(b.log, { at, who: short(who, 14), text: short(text, 110), kind }, 60),
 })
 
-const FILE_KIND: Record<string, keyof Omit<FileStat, 'last'>> = {
+const FILE_KIND: Record<string, keyof Omit<FileStat, 'last' | 'out'>> = {
   Read: 'read',
   Edit: 'edit',
   MultiEdit: 'edit',
@@ -152,7 +172,8 @@ const bump = (b: Board, at: number): Board => {
 }
 
 export const startCall = (b: Board, call: Call, input: { file?: string; command?: string; agentId?: string }, prefix: string): Board => {
-  let next = bump({ ...b, calls: tail(b.calls, call, 60), turnTools: b.turnTools + (call.agent ? 0 : 1) }, call.at)
+  const kept: Call = input.file ? { ...call, file: input.file } : call
+  let next = bump({ ...b, calls: tail(b.calls, kept, 60), turnTools: b.turnTools + (call.agent ? 0 : 1) }, call.at)
   const kind = FILE_KIND[call.tool]
   if (kind && input.file) {
     const f = next.files[input.file] ?? { read: 0, edit: 0, write: 0, last: 0 }
@@ -185,10 +206,12 @@ export const finishCall = (b: Board, id: string, status: CallStatus, ms: number,
     durs: status === 'denied' ? s.durs : tail(s.durs, ms, 50),
     out: (s.out ?? 0) + out,
   }
+  const f = call.file ? b.files[call.file] : undefined
   return {
     ...b,
     calls: b.calls.map(c => (c.id === id ? { ...c, status, ms } : c)),
     stats: { ...b.stats, [call.tool]: stat },
+    files: f && call.file && out > 0 ? { ...b.files, [call.file]: { ...f, out: (f.out ?? 0) + out } } : b.files,
   }
 }
 
@@ -285,10 +308,28 @@ export const throughput = (b: Board) => {
   return ms > 0 && out > 0 ? out / (ms / 1000) : null
 }
 
+// Each rate-limit window's readings, kept only while the window is the same one (same reset time), and only when
+// the reading moves, so the first and last points give the pace at which it fills.
+const trackLimits = (hist: Record<string, LimitTrack>, limits: Limit[], at: number): Record<string, LimitTrack> => {
+  const out: Record<string, LimitTrack> = {}
+  for (const l of limits) {
+    const prev = hist[l.kind]
+    const pts = prev && prev.resetsAt === l.resetsAt ? prev.pts : []
+    const last = pts[pts.length - 1]
+    out[l.kind] = { resetsAt: l.resetsAt, pts: last && last[1] === l.pct ? pts : tail(pts, [at, l.pct] as [number, number], 30) }
+  }
+  return out
+}
+
 export const withCtx = (b: Board, ctx: Ctx): Board => {
   const last = b.ctxHist[b.ctxHist.length - 1]
   const pct = ctx.pct
-  return { ...b, ctx, ctxHist: pct != null && pct !== last ? tail(b.ctxHist, pct, 60) : b.ctxHist }
+  return {
+    ...b,
+    ctx,
+    ctxHist: pct != null && pct !== last ? tail(b.ctxHist, pct, 60) : b.ctxHist,
+    limitHist: trackLimits(b.limitHist, ctx.limits, b.now),
+  }
 }
 
 export const withVitals = (b: Board, v: Vitals, at: number): Board => ({
@@ -363,12 +404,15 @@ export const loopWatch = (b: Board): Loop | null => {
   return { tool, detail, n: worst[1], failing: true }
 }
 
-export type FileRow = { path: string; read: number; edit: number; write: number; touches: number; last: number }
+export type FileRow = { path: string; read: number; edit: number; write: number; touches: number; last: number; out: number }
 
 export const fileBoard = (b: Board): FileRow[] =>
   Object.entries(b.files)
-    .map(([path, f]) => ({ path, ...f, touches: f.read + f.edit + f.write }))
+    .map(([path, f]) => ({ path, ...f, out: f.out ?? 0, touches: f.read + f.edit + f.write }))
     .sort((x, y) => y.edit + y.write - (x.edit + x.write) || y.touches - x.touches)
+
+// The files whose results (reads, and the snippets edits return) took the most room in the window, heaviest first.
+export const fileWeight = (b: Board): FileRow[] => fileBoard(b).filter(f => f.out > 0).sort((x, y) => y.out - x.out)
 
 export const slowest = (b: Board, n = 5): Call[] =>
   b.calls.filter(c => c.ms !== null).sort((x, y) => (y.ms ?? 0) - (x.ms ?? 0)).slice(0, n)
@@ -392,12 +436,47 @@ export const costRate = (b: Board): { perHour: number | null; perTurn: number | 
   return { perHour: usd / hours, perTurn, projected: perTurn !== null ? usd + perTurn * 10 : null }
 }
 
+export type LimitEta = { kind: string; pct: number; etaMs: number | null }
+
+// When each rate-limit window fills at its recent pace: null when it is not filling, the readings span under five
+// minutes, or the window resets first.
+export const limitEta = (b: Board): LimitEta[] =>
+  (b.ctx?.limits ?? []).map(l => {
+    const pts = b.limitHist[l.kind]?.pts ?? []
+    const first = pts[0]
+    const last = pts[pts.length - 1]
+    if (!first || !last || last[0] - first[0] < 5 * 60_000 || last[1] <= first[1] || l.pct >= 100) return { kind: l.kind, pct: l.pct, etaMs: null }
+    const perMs = (last[1] - first[1]) / (last[0] - first[0])
+    const eta = Math.max(0, (100 - last[1]) / perMs - (b.now - last[0]))
+    const reset = l.resetsAt ? Date.parse(l.resetsAt) - b.now : Number.NaN
+    return { kind: l.kind, pct: l.pct, etaMs: Number.isFinite(reset) && reset > 0 && reset <= eta ? null : eta }
+  })
+
 // Turns left before the budget runs out, at the average cost per turn; null with no budget or no costed turns.
 export const budgetRunway = (b: Board, cfg: Cfg): number | null => {
   const { perTurn } = costRate(b)
   if (cfg.budgetUsd <= 0 || !perTurn) return null
   return Math.max(0, Math.floor((cfg.budgetUsd - (b.ctx?.usd ?? 0)) / perTurn))
 }
+
+// Hours with no toasts. A range that wraps midnight (22-7) counts both sides.
+export const isQuiet = (cfg: Cfg, now: number) => {
+  if (!cfg.quiet) return false
+  const h = new Date(now).getHours()
+  const [a, z] = cfg.quiet
+  return a < z ? h >= a && h < z : h >= a || h < z
+}
+
+// .git/HEAD: "ref: refs/heads/main" on a branch, a bare commit id when detached.
+export const parseHead = (text: string | null): string => {
+  const t = (text ?? '').trim()
+  const ref = /^ref:\s*refs\/heads\/(.+)$/.exec(t)
+  if (ref) return ref[1] ?? ''
+  return /^[0-9a-f]{7,64}$/.test(t) ? t.slice(0, 7) : ''
+}
+
+// In a worktree or submodule .git is a file, "gitdir: <path>", naming the real git directory.
+export const gitDirOf = (text: string | null): string | null => /^gitdir:\s*(.+)$/m.exec(text ?? '')?.[1]?.trim() ?? null
 
 // ---------------------------------------------------------------- days
 
@@ -415,6 +494,14 @@ export const addDay = (l: Lifetime, key: string, add: Partial<DayStat>): Lifetim
   days[key] = { sessions: d.sessions + (add.sessions ?? 0), usd: d.usd + (add.usd ?? 0), turns: d.turns + (add.turns ?? 0), calls: d.calls + (add.calls ?? 0) }
   const keep = Object.keys(days).sort().slice(-60)
   return { ...l, days: Object.fromEntries(keep.map(k => [k, days[k] as DayStat])) }
+}
+
+// Spend over the last 7 days against the 7 before; change is null when the earlier week spent nothing.
+export const weekCompare = (l: Lifetime | null, now: number): { week: number; prior: number; change: number | null } => {
+  const d = lastDays(l, now, 14)
+  const prior = d.slice(0, 7).reduce((s, x) => s + x.usd, 0)
+  const week = d.slice(7).reduce((s, x) => s + x.usd, 0)
+  return { week, prior, change: prior > 0 ? (week - prior) / prior : null }
 }
 
 // The last `n` calendar days ending on the day of `now`, oldest first; days with no activity read zero.
@@ -481,7 +568,8 @@ export const health = (b: Board, cfg: Cfg): Health => {
 export const compliance = (b: Board): number | null => (b.bash.total ? Math.round((b.bash.prefixed / b.bash.total) * 100) : null)
 
 // Threshold crossings worth a toast, each raised once (context ones re-arm after a compaction).
-export const newAlerts = (b: Board, cfg: Cfg): { key: string; text: string }[] => {
+// `today`: what the lifetime store has for today's spend, for the daily budget.
+export const newAlerts = (b: Board, cfg: Cfg, today: number | null = null): { key: string; text: string }[] => {
   const out: { key: string; text: string }[] = []
   const add = (key: string, when: boolean, text: string) => {
     if (when && !b.alerts.includes(key)) out.push({ key, text })
@@ -498,6 +586,21 @@ export const newAlerts = (b: Board, cfg: Cfg): { key: string; text: string }[] =
     add('budget100', usd >= cfg.budgetUsd, `Session cost $${usd.toFixed(2)}: over the $${cfg.budgetUsd} budget`)
   }
   for (const l of b.ctx?.limits ?? []) add(`limit-${l.kind}`, l.pct >= 90, `Rate limit ${l.kind} at ${l.pct}%`)
+  const f = forecast(b)
+  // A "ctx" key, so it re-arms after a compaction like the other context alerts.
+  add('ctx-runway', f.turnsLeft !== null && f.ceiling < 100 && f.turnsLeft <= 2, `Auto-compact in ~${f.turnsLeft} turn${f.turnsLeft === 1 ? '' : 's'}: consider /compact now`)
+  for (const e of limitEta(b)) {
+    if (e.etaMs !== null) add(`limit-eta-${e.kind}`, e.etaMs <= 30 * 60_000, `Rate limit ${e.kind.replace(/_/g, ' ')} full in ~${dur(e.etaMs)} at this pace`)
+  }
+  if (cfg.dailyBudgetUsd > 0 && today !== null) {
+    const day = dayKey(b.now)
+    add(`day80:${day}`, today >= cfg.dailyBudgetUsd * 0.8, `Today's spend $${today.toFixed(2)}: 80% of the $${cfg.dailyBudgetUsd} daily budget`)
+    add(`day100:${day}`, today >= cfg.dailyBudgetUsd, `Today's spend $${today.toFixed(2)}: over the $${cfg.dailyBudgetUsd} daily budget`)
+  }
+  if (cfg.longTurnMin > 0 && b.running && b.now - b.turnStart >= cfg.longTurnMin * 60_000) {
+    const lastCall = b.calls.filter(c => !c.agent).slice(-1)[0]
+    add(`long:${b.turnCount}`, true, `Turn running ${dur(b.now - b.turnStart)}${lastCall ? ` · last: ${lastCall.tool} ${short(lastCall.detail, 40)}` : ''}`)
+  }
   const loop = loopWatch(b)
   if (loop) {
     const what = `${loop.tool} ${short(loop.detail, 40)}`
@@ -566,22 +669,27 @@ export const report = (b: Board, cfg: Cfg, life: Lifetime | null): string => {
   const left = budgetRunway(b, cfg)
   const month = life ? lastDays(life, b.now, 30) : []
   const monthUsd = month.reduce((s, d) => s + d.usd, 0)
+  const week = life ? weekCompare(life, b.now) : null
+  const etas = limitEta(b).filter(e => e.etaMs !== null)
+  const heavy = fileWeight(b).slice(0, 5)
   const lines = [
     `# Embermeter session report`,
     ``,
     `- Health: **${h.grade}** (${h.score}/100)${h.reasons.length ? ` · ${h.reasons.join(', ')}` : ''}`,
-    `- Duration: ${dur(b.now - b.startedAt)} · ${b.turnCount} turns · ${Object.values(b.stats).reduce((s, x) => s + x.n, 0)} tool calls`,
+    `- Duration: ${dur(b.now - b.startedAt)} · ${b.turnCount} turns · ${Object.values(b.stats).reduce((s, x) => s + x.n, 0)} tool calls${b.branch ? ` · on \`${b.branch}\`` : ''}`,
     `- Context: ${kfmt(b.ctx?.tokens)} / ${kfmt(b.ctx?.window)} (${b.ctx?.pct != null ? Math.round(b.ctx.pct) : '?'}%)${f.turnsLeft !== null ? ` · ~${f.turnsLeft} turns of runway` : ''} · ${b.compactions} compactions`,
     `- Cost: ${money(b.ctx?.usd)}${r.perHour !== null ? ` · ${money(r.perHour)}/h` : ''}${r.perTurn !== null ? ` · ${money(r.perTurn)}/turn` : ''}${left !== null ? ` · ~${left} turns of budget left` : ''}`,
     models.length > 1 ? `- Models: ${models.map(m => `${m.model} ${money(m.usd)} (${m.turns} turns)`).join(' · ')}` : '',
     weight.length ? `- Context fed by tools (est.): ${weight.map(w => `${w.tool} ${kfmt(w.out)}`).join(' · ')}` : '',
+    heavy.length ? `- Heaviest files (est.): ${heavy.map(f => `${shortPath(f.path, 40)} ${kfmt(f.out)}`).join(' · ')}` : '',
+    etas.length ? `- Rate limits at this pace: ${etas.map(e => `${e.kind.replace(/_/g, ' ')} full in ~${dur(e.etaMs)}`).join(' · ')}` : '',
     loop ? `- **Loop warning:** ${loop.tool} \`${short(loop.detail, 50)}\` ${loop.failing ? 'failed' : 'repeated'} ${loop.n} times` : '',
     `- Tokens: ${kfmt(b.tokens.input)} in · ${kfmt(b.tokens.output)} out · ${kfmt(b.tokens.cacheRead)} cache read · ${kfmt(b.tokens.cacheWrite)} cache write${cacheHit(b.tokens) !== null ? ` · ${Math.round((cacheHit(b.tokens) ?? 0) * 100)}% cache hit` : ''}${throughput(b) !== null ? ` · ${Math.round(throughput(b) ?? 0)} tok/s` : ''}${b.model ? ` · ${b.model}` : ''}`,
     b.comp ? `- Context mix: ${b.comp.slices.slice().sort((x, y) => y.tokens - x.tokens).slice(0, 5).map(s => `${s.name} ${kfmt(s.tokens)}`).join(' · ')}` : '',
     `- Gate: ${b.gate.allow} allowed · ${b.gate.ask} asked · ${b.gate.deny} denied · ${b.guardBlocks} heat-guard blocks`,
     cfg.prefix && compliance(b) !== null ? `- \`${cfg.prefix}\` prefix compliance: ${compliance(b)}% of ${b.bash.total} commands` : '',
     `- Subagents: ${b.agents.length} (${b.agents.filter(a => a.status === 'done').length} done)`,
-    life ? `- All time: ${life.sessions} sessions · ${money(life.usd)} · ${life.turns} turns · ${life.calls} tool calls · last 30 days ${money(monthUsd)}` : '',
+    life ? `- All time: ${life.sessions} sessions · ${money(life.usd)} · ${life.turns} turns · ${life.calls} tool calls · last 30 days ${money(monthUsd)}${week && week.change !== null ? ` · last 7 days ${money(week.week)} (${week.change >= 0 ? '+' : ''}${Math.round(week.change * 100)}% on the week before)` : ''}` : '',
     ``,
     rows.length ? `| Tool | Calls | OK | Avg | p95 |\n|---|---:|---:|---:|---:|\n${rows.map(t => `| ${t.tool} | ${t.n} | ${t.okPct}% | ${dur(t.avg)} | ${dur(t.p95)} |`).join('\n')}` : '',
     ``,
