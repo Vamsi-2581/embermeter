@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { emptyBoard, endTurn, finishCall, parseConfig, startCall, startTurn } from '../hooks/core'
-import { contextPage, drawContext, spend, tools } from '../hooks/draw'
+import { card, contextPage, drawContext, spend, tools } from '../hooks/draw'
 import type { Board } from '../types'
 
 const ctx = (pct: number, usd: number) => ({ tokens: pct * 2000, window: 200000, pct, usd, limits: [] })
@@ -35,4 +35,13 @@ test('tools and context pages show the context fed back by each tool', async () 
   const D = drawContext(cfg, null, 90)
   expect(tools(D, session())).toContain('ctx fed')
   expect(contextPage(D, session())).toContain('FED BACK BY TOOLS')
+})
+
+test('the session card is a static picture with escaped text', async () => {
+  const cfg = parseConfig({})
+  const b = { ...session(), branch: 'fix/<script>' }
+  const out = card(drawContext(cfg, null, 90), b, cfg)
+  expect(out).toContain('width="600"')
+  expect(out).toContain('fix/&lt;script&gt;')
+  expect(out.includes('<animate')).toBe(false)
 })
