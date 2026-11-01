@@ -1,7 +1,15 @@
 import { expect, test } from 'claude-code/testing'
 
 import {
+  addDay,
+  budgetRunway,
   cacheHit,
+  ctxWeight,
+  dayKey,
+  estTokens,
+  lastDays,
+  loopWatch,
+  modelSplit,
   compactPct,
   throughput,
   toComposition,
@@ -27,7 +35,7 @@ import {
   toolBoard,
   withCtx,
 } from '../hooks/core'
-import type { Call } from '../types'
+import type { Call, Lifetime } from '../types'
 
 const cfg = parseConfig({})
 const call = (id: string, tool: string, at = 1000): Call => ({ id, tool, detail: '', status: 'run', agent: false, at, ms: null })
@@ -38,6 +46,11 @@ test('config falls back to safe defaults and rejects a bad pattern', async () =>
   expect(c.maxTempC).toBe(80)
   expect(c.heavy.test('npm run build')).toBe(true)
   expect(c.prefix).toBe('rtk')
+})
+
+test('the theme accepts washi and falls back to night', async () => {
+  expect(parseConfig({ theme: 'washi' }).theme).toBe('washi')
+  expect(parseConfig({ theme: 'neon' }).theme).toBe('night')
 })
 
 test('a stored board from an older version is filled in', async () => {
@@ -187,4 +200,75 @@ test('the context breakdown becomes a composition, and the runway ends at auto-c
   b = endTurn(b, 1000, 1000, 'answer', ctx(60))
   expect(forecast(b).turnsLeft).toBe(2)
   expect(toComposition(null, 0)).toBe(null)
+})
+
+const ran = (b: ReturnType<typeof emptyBoard>, id: string, tool: string, detail: string, status: 'ok' | 'fail' = 'ok') =>
+  finishCall(startCall(b, { ...call(id, tool), detail }, {}, ''), id, status, 10)
+
+test('the loop watch flags repeats and repeated failures, but not paging through a file', async () => {
+  let b = emptyBoard(0)
+  for (const id of ['a', 'b', 'c']) b = ran(b, id, 'Bash', 'npm test')
+  expect(loopWatch(b)).toEqual({ tool: 'Bash', detail: 'npm test', n: 3, failing: false })
+  expect(health(b, cfg).reasons).toContain('looping: Bash ×3')
+  expect(newAlerts(b, cfg).some(a => a.key === 'loop:Bash:npm test')).toBe(true)
+
+  let r = emptyBoard(0)
+  for (const id of ['a', 'b', 'c', 'd']) r = ran(r, id, 'Read', '/src/big.ts')
+  expect(loopWatch(r)).toBe(null)
+
+  let f = emptyBoard(0)
+  f = ran(f, 'a', 'Bash', 'tsc', 'fail')
+  f = ran(f, 'b', 'Edit', '/src/x.ts')
+  f = ran(f, 'c', 'Bash', 'tsc', 'fail')
+  f = ran(f, 'd', 'Edit', '/src/x.ts')
+  expect(loopWatch(f)).toBe(null)
+  f = ran(f, 'e', 'Bash', 'tsc', 'fail')
+  expect(loopWatch(f)).toEqual({ tool: 'Bash', detail: 'tsc', n: 3, failing: true })
+})
+
+test('tool results are weighed by the context they feed back', async () => {
+  expect(estTokens('x'.repeat(4001))).toBe(1001)
+  expect(estTokens(undefined)).toBe(0)
+  let b = emptyBoard(0)
+  b = finishCall(startCall(b, call('a', 'Read'), {}, ''), 'a', 'ok', 5, 3000)
+  b = finishCall(startCall(b, call('b', 'Bash'), {}, ''), 'b', 'ok', 5, 1000)
+  const w = ctxWeight(b)
+  expect(w.map(x => x.tool)).toEqual(['Read', 'Bash'])
+  expect(w[0]?.share).toBe(0.75)
+  // A stat stored before `out` existed still reads.
+  expect(toolBoard(normalize({ stats: { Grep: { n: 1, ok: 1, fail: 0, denied: 0, totalMs: 5, durs: [5] } } }))[0]?.out).toBe(0)
+})
+
+test('turns are split by model, and the budget runway follows the cost per turn', async () => {
+  let b = emptyBoard(0)
+  b = startTurn(b, 0, ctx(10, 0))
+  b = endTurn(b, 1000, 1000, 'answer', ctx(12, 1), { model: 'opus', output_tokens: 300, input_tokens: 100 })
+  b = startTurn(b, 2000, ctx(12, 1))
+  b = endTurn(b, 3000, 1000, 'answer', ctx(13, 1.5), { model: 'haiku', output_tokens: 50 })
+  const m = modelSplit(b)
+  expect(m.map(x => x.model)).toEqual(['opus', 'haiku'])
+  expect(Math.round((m[0]?.share ?? 0) * 1000)).toBe(667)
+  expect(m[0]?.output).toBe(300)
+  const budget = parseConfig({ budgetUsd: 4 })
+  expect(budgetRunway(b, budget)).toBe(3)
+  expect(budgetRunway(b, cfg)).toBe(null)
+  expect(newAlerts(b, parseConfig({ budgetUsd: 3 })).map(a => a.key)).toContain('budget50')
+})
+
+test('daily totals add up, keep 60 days, and fill gaps with zero', async () => {
+  const noon = new Date(2026, 10, 1, 12).getTime()
+  expect(dayKey(noon)).toBe('2026-11-01')
+  let l: Lifetime = { sessions: 0, usd: 0, turns: 0, calls: 0 }
+  l = addDay(l, '2026-11-01', { turns: 1, usd: 0.5 })
+  l = addDay(l, '2026-11-01', { turns: 2, usd: 0.25, calls: 4 })
+  expect(l.days?.['2026-11-01']).toEqual({ sessions: 0, usd: 0.75, turns: 3, calls: 4 })
+  for (let i = 1; i <= 70; i++) l = addDay(l, `2025-01-${String(i).padStart(2, '0')}`, { turns: 1 })
+  expect(Object.keys(l.days ?? {}).length).toBe(60)
+  expect(l.days?.['2026-11-01']).toBeTruthy()
+  const days = lastDays(l, noon, 30)
+  expect(days.length).toBe(30)
+  expect(days[29]?.key).toBe('2026-11-01')
+  expect(days[29]?.turns).toBe(3)
+  expect(days[0]?.key).toBe('2026-10-03')
+  expect(days[0]?.turns).toBe(0)
 })
