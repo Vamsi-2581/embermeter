@@ -5,7 +5,7 @@
 
 <p align="center">
   <a href="https://github.com/X-Saikat-93/embermeter/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/X-Saikat-93/embermeter/ci.yml?branch=main&style=flat-square&label=ci&labelColor=1d2124&color=5d7848"></a>
-  <a href="https://github.com/X-Saikat-93/embermeter/releases"><img alt="Release" src="https://img.shields.io/github/v/release/X-Saikat-93/embermeter?style=flat-square&labelColor=1d2124&color=cc3b2e&display_name=tag"></a>
+  <a href="https://github.com/X-Saikat-93/embermeter/releases"><img alt="Release" src="https://img.shields.io/github/v/release/X-Saikat-93/embermeter?style=flat-square&labelColor=1d2124&color=cc3b2e&display_name=tag&cacheSeconds=3600"></a>
   <a href="https://github.com/X-Saikat-93/embermeter/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://img.shields.io/github/actions/workflow/status/X-Saikat-93/embermeter/codeql.yml?branch=main&style=flat-square&label=codeql&labelColor=1d2124&color=5d7848"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/X-Saikat-93/embermeter"><img alt="OpenSSF Scorecard" src="https://img.shields.io/ossf-scorecard/github.com/X-Saikat-93/embermeter?style=flat-square&label=scorecard&labelColor=1d2124&color=5d7848"></a>
   <a href="https://github.com/X-Saikat-93/embermeter/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/X-Saikat-93/embermeter?style=flat-square&labelColor=1d2124&color=97794c"></a>
