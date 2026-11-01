@@ -121,80 +121,154 @@ const plate = (w: number, h: number, body: string, label: string, id: string, de
 
 // ---------------------------------------------------------------- hero
 
+// A ridge line in ink: points across, closed to the foot, faded by its own gradient.
+const ridge = (pts: [number, number][], foot: number, fill: string, opacity: number) =>
+  `<path d="M ${n(pts[0]![0])} ${foot} ${pts.map(([x, y]) => `L ${n(x)} ${n(y)}`).join(' ')} L ${n(pts[pts.length - 1]![0])} ${foot} Z" fill="${fill}" opacity="${opacity}"/>`
+
+// A band of mist that drifts sideways and back.
+const mistBand = (id: string, cx: number, cy: number, rx: number, ry: number, dx: number, dur: number, o = 0.9) =>
+  `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${P.ground}" filter="url(#${id}-mist)" opacity="${o}">` +
+  `<animate attributeName="cx" values="${cx};${cx + dx};${cx}" dur="${dur}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/></ellipse>`
+
+// A tapered brush stroke, thick in the middle and dry at both ends.
+const brushStroke = (x: number, y: number, w: number, h: number, color: string) =>
+  `<path d="M ${x} ${y} C ${n(x + w * 0.25)} ${n(y - h)} ${n(x + w * 0.7)} ${n(y - h * 0.9)} ${x + w} ${n(y - h * 0.15)} C ${n(x + w * 0.7)} ${n(y + h * 0.35)} ${n(x + w * 0.3)} ${n(y + h * 0.45)} ${x} ${y} Z" fill="${color}"/>`
+
 const hero = () => {
-  const H = 380
-  const cx = 668
-  const cy = 188
-  const r = 98
+  const H = 440
+  const cx = 632
+  const cy = 176
+  const r = 100
   const f = 0.62
+  const lake = 318
   let g = ''
 
-  // The sun is the dial: a ring of ink ticks around it, a crimson red line, and a pointer that settles on the reading.
-  g += sun('hero', cx, cy, r)
-  for (let i = 0; i <= 24; i++) {
-    const a = deg(i / 24)
-    const major = i % 4 === 0
-    const [x0, y0] = pt(cx, cy, r + 12, a)
-    const [x1, y1] = pt(cx, cy, r + (major ? 22 : 17), a)
-    g += `<line x1="${n(x0)}" y1="${n(y0)}" x2="${n(x1)}" y2="${n(y1)}" stroke="${P.ink}" stroke-opacity="${major ? 0.7 : 0.35}" stroke-width="${major ? 1.4 : 1}" stroke-linecap="round"/>`
+  // Mounting: ink corner brackets, as on a hanging scroll.
+  const k = 18
+  for (const [x, y, sx, sy] of [
+    [22, 22, 1, 1],
+    [W - 22, 22, -1, 1],
+    [22, H - 22, 1, -1],
+    [W - 22, H - 22, -1, -1],
+  ] as const) {
+    g += `<path d="M ${x} ${y + sy * k} L ${x} ${y} L ${x + sx * k} ${y}" fill="none" stroke="${P.ink}" stroke-opacity="0.55" stroke-width="1.4"/>`
   }
-  g += `<path d="${arc(cx, cy, r + 17, deg(0.85), deg(1))}" fill="none" stroke="${P.rust}" stroke-width="3" stroke-linecap="round"/>`
+
+  // The sun bleeds a little into the paper, as watercolour does.
+  g += `<circle cx="${cx}" cy="${cy}" r="${r + 14}" fill="${P.amber}" opacity="0.10" filter="url(#hero-bleed)"/>`
+  g += `<g filter="url(#hero-edge)">${sun('hero', cx, cy, r)}</g>`
+
+  // The dial: a fine ring of ticks with numerals, a crimson red line, and a pointer that settles on the reading.
+  for (let i = 0; i <= 40; i++) {
+    const a = deg(i / 40)
+    const major = i % 10 === 0
+    const mid = i % 5 === 0
+    const [x0, y0] = pt(cx, cy, r + 14, a)
+    const [x1, y1] = pt(cx, cy, r + (major ? 25 : mid ? 21 : 18), a)
+    g += `<line x1="${n(x0)}" y1="${n(y0)}" x2="${n(x1)}" y2="${n(y1)}" stroke="${P.ink}" stroke-opacity="${major ? 0.75 : mid ? 0.5 : 0.28}" stroke-width="${major ? 1.4 : 0.9}" stroke-linecap="round"/>`
+    if (major) {
+      const [lx, ly] = pt(cx, cy, r + 36, a)
+      g += t(lx, ly + 3, String(i * 2.5), { font: MONO, size: 8, color: P.faint, anchor: 'middle' })
+    }
+  }
+  g += `<path d="${arc(cx, cy, r + 19, deg(0.85), deg(1))}" fill="none" stroke="${P.rust}" stroke-width="3" stroke-linecap="round"/>`
   const end = deg(f)
-  const [px, py] = pt(cx, cy, r + 30, 0)
+  const [px, py] = pt(cx, cy, r + 9, 0)
   g +=
     `<g transform="rotate(${n(end)} ${cx} ${cy})"><animateTransform attributeName="transform" type="rotate" values="150 ${cx} ${cy};${n(end + 8)} ${cx} ${cy};${n(end - 3)} ${cx} ${cy};${n(end)} ${cx} ${cy}" keyTimes="0;0.6;0.82;1" dur="2.4s" fill="freeze"/>` +
-    `<path d="M ${n(px)} ${n(py)} l 9 -5 l 0 10 Z" fill="${P.ink}"/></g>`
+    `<path d="M ${n(px)} ${n(py)} l 13 -5.5 l 0 11 Z" fill="${P.ink}"/></g>`
 
-  g += mountain('hero', cx - 128, 312, 1.25)
+  // Embers lift off the sun and fade.
+  const sparks: [number, number, number, number][] = [
+    [cx - 46, 2.6, 0, 5.2],
+    [cx + 8, 2, 1.4, 6],
+    [cx + 52, 2.4, 2.6, 5.6],
+    [cx - 14, 1.8, 3.6, 6.4],
+    [cx + 34, 1.6, 4.4, 5],
+  ]
+  for (const [x, rr, begin, dur] of sparks) {
+    g +=
+      `<circle cx="${x}" cy="${cy - r * 0.55}" r="${rr}" fill="${P.amber}" opacity="0">` +
+      `<animate attributeName="cy" values="${cy - r * 0.55};${cy - r - 46}" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/>` +
+      `<animate attributeName="cx" values="${x};${x + 9};${x - 5}" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/>` +
+      `<animate attributeName="opacity" values="0;0.9;0" keyTimes="0;0.25;1" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/></circle>`
+  }
+
+  // Three ranges, each paler with distance, with mist between them; the whole landscape dissolves into the paper at its edges.
+  g += `<g mask="url(#hero-land)">`
+  g += ridge([[388, 262], [430, 238], [468, 250], [512, 226], [560, 246], [610, 230], [660, 244], [712, 220], [760, 240], [812, 228], [858, 246]], lake, P.steel, 0.16)
+  g += mistBand('hero', 600, 262, 260, 14, 30, 16, 0.85)
+  g += ridge([[396, 300], [446, 268], [490, 280], [540, 252], [580, 270], [632, 262], [690, 276], [736, 250], [790, 272], [858, 262]], lake, P.ink, 0.3)
+  g += mistBand('hero', 690, 292, 220, 12, -26, 13, 0.8)
+  g += mountain('hero', cx - 136, lake, 1.2)
+
+  // The lake: still water, and the sun's reflection broken into shimmering strokes.
+  g += `<rect x="380" y="${lake}" width="${W - 380}" height="${H - 92 - lake}" fill="url(#hero-water)"/>`
+  ;[
+    [lake + 7, 86, 0],
+    [lake + 14, 64, 0.5],
+    [lake + 21, 48, 1],
+    [lake + 28, 30, 1.5],
+    [lake + 34, 18, 2],
+  ].forEach(([y, w, d]) => {
+    g +=
+      `<rect x="${n(cx - w! / 2)}" y="${y}" width="${w}" height="2.2" rx="1.1" fill="${P.amber}" opacity="0.55">` +
+      `<animate attributeName="x" values="${n(cx - w! / 2)};${n(cx - w! / 2 + 5)};${n(cx - w! / 2 - 3)};${n(cx - w! / 2)}" dur="4.2s" begin="-${d}s" repeatCount="indefinite"/>` +
+      `<animate attributeName="opacity" values="0.55;0.25;0.55" dur="3.1s" begin="-${d}s" repeatCount="indefinite"/></rect>`
+  })
+  g += `<line x1="380" y1="${lake}" x2="${W - 34}" y2="${lake}" stroke="${P.ink}" stroke-opacity="0.18"/>`
+  g += `</g>`
+
   g += flock(
     [
-      [cx + 30, cy - 52, 1],
-      [cx + 58, cy - 66, 0.9],
-      [cx + 50, cy - 34, 0.95],
-      [cx - 10, cy + 2, 0.85],
+      [cx + 30, cy - 58, 1],
+      [cx + 60, cy - 72, 0.9],
+      [cx + 52, cy - 38, 0.95],
+      [cx - 6, cy - 6, 0.82],
+      [cx + 98, cy - 50, 0.7],
     ],
     -14,
     -6,
     11,
   )
 
-  // Masthead.
-  g += t(44, 40, 'MODEL EM-1', { font: MONO, size: 10, color: P.faint, ls: 3 })
-  g += t(W / 2, 41, 'Operator’s Manual', { font: SERIF, size: 13, italic: true, color: P.sub, anchor: 'middle' })
-  g += t(W - 44, 40, 'No. 0001 · MIT', { font: MONO, size: 10, color: P.faint, anchor: 'end', ls: 1 })
-  g += `<line x1="44" y1="54" x2="${W - 44}" y2="54" stroke="${P.ink}" stroke-opacity="0.25"/>`
+  // A vertical caption down the right margin, as on a scroll.
+  g += t(0, 0, 'EMBERMETER · MODEL EM-1 · NO. 0001', { font: MONO, size: 8.5, color: P.faint, ls: 3, attrs: ` transform="translate(${W - 40} 70) rotate(90)"` })
 
-  // Wordmark, seal and tagline.
-  g += t(44, 140, 'Embermeter', { font: SERIF, size: 62, color: P.ink, ls: -1 })
-  g += seal(388, 92, 38, 'EM')
-  g += t(46, 174, 'a live instrument panel for Claude Code', { font: SERIF, size: 17, italic: true, color: P.sub })
-  g += `<line x1="46" y1="192" x2="128" y2="192" stroke="${P.amber}" stroke-width="2" stroke-linecap="round"/>`
+  // Kicker, wordmark, brush stroke, seal and tagline.
+  g += t(58, 78, 'OPERATOR’S MANUAL', { font: MONO, size: 9.5, color: P.amber, ls: 4 })
+  g += `<line x1="58" y1="90" x2="98" y2="90" stroke="${P.amber}" stroke-width="1.2"/>`
+  g += t(54, 160, 'Embermeter', { font: SERIF, size: 70, color: P.ink, ls: -1.5 })
+  g += brushStroke(58, 184, 230, 7, P.amber)
+  g += seal(440, 98, 40, 'EM')
+  g += t(58, 218, 'a live instrument panel for Claude Code', { font: SERIF, size: 18, italic: true, color: P.sub })
 
-  // Readouts: each cycles through a few plausible values, discretely, like a display.
+  // Readouts on rice paper: a caption, a live dot, and a value that ticks like a display.
   const readout = (x: number, cap: string, values: string[]) => {
-    let s = `<rect x="${x}" y="212" width="118" height="56" rx="6" fill="${P.panel}" fill-opacity="0.7" stroke="${P.ink}" stroke-opacity="0.2"/>`
-    s += t(x + 12, 231, cap, { font: MONO, size: 8.5, color: P.faint, ls: 2 })
-    s += `<circle cx="${x + 106}" cy="228" r="3" fill="${P.amber}"><animate attributeName="opacity" values="1;0.25;1" dur="1.8s" repeatCount="indefinite"/></circle>`
-    const k = values.length
+    let s = `<rect x="${x}" y="246" width="104" height="58" rx="3" fill="${P.panel}" fill-opacity="0.55"/>`
+    s += `<line x1="${x}" y1="246" x2="${x + 104}" y2="246" stroke="${P.ink}" stroke-opacity="0.6" stroke-width="1.2"/>`
+    s += t(x + 10, 264, cap, { font: MONO, size: 8, color: P.faint, ls: 2 })
+    s += `<circle cx="${x + 95}" cy="261" r="2.6" fill="${P.amber}"><animate attributeName="opacity" values="1;0.25;1" dur="1.8s" repeatCount="indefinite"/></circle>`
+    const k2 = values.length
     values.forEach((v, i) => {
       const vals = values.map((_, j) => (j === i ? 1 : 0)).join(';') + `;${i === 0 ? 1 : 0}`
-      const times = values.map((_, j) => n(j / k)).join(';') + ';1'
-      s += t(x + 12, 257, v, {
+      const times = values.map((_, j) => n(j / k2)).join(';') + ';1'
+      s += t(x + 10, 290, v, {
         font: MONO,
         size: 18,
         weight: 600,
         color: P.ink,
         attrs: ` opacity="${i === 0 ? 1 : 0}"`,
-        inner: `<animate attributeName="opacity" values="${vals}" keyTimes="${times}" calcMode="discrete" dur="${k * 1.7}s" repeatCount="indefinite"/>`,
+        inner: `<animate attributeName="opacity" values="${vals}" keyTimes="${times}" calcMode="discrete" dur="${k2 * 1.7}s" repeatCount="indefinite"/>`,
       })
     })
     return s
   }
-  g += readout(44, 'RUNWAY', ['9 turns', '8 turns'])
+  g += readout(58, 'RUNWAY', ['9 turns', '8 turns'])
   g += readout(174, 'CACHE HIT', ['89%', '90%', '89%', '91%'])
-  g += readout(304, 'CPU', ['68°', '69°', '67°', '68°'])
+  g += readout(290, 'SPEND', ['$2.41', '$2.44', '$2.47'])
 
-  // Ticker tape, in ink with vermilion stops.
+  // Ticker tape between two ink rules, with vermilion stops.
   const items = [
     'turn 14 · 2.1k out · 38s',
     'Bash npm test ✓ 18.4s',
@@ -211,13 +285,25 @@ const hero = () => {
   const chars = items.join(sep).length + sep.length
   const Lt = n(chars * 6.6)
   const tape = items.map(s => `<tspan fill="${P.sub}">${esc(s)}</tspan><tspan fill="${P.amber}">${sep}</tspan>`).join('')
-  const ty = 330
-  g += `<defs><clipPath id="tape"><rect x="44" y="${ty}" width="${W - 88}" height="28"/></clipPath></defs>`
-  g += `<line x1="44" y1="${ty}" x2="${W - 44}" y2="${ty}" stroke="${P.ink}" stroke-opacity="0.25"/><line x1="44" y1="${ty + 28}" x2="${W - 44}" y2="${ty + 28}" stroke="${P.ink}" stroke-opacity="0.25"/>`
+  const ty = H - 72
+  g += `<defs><clipPath id="tape"><rect x="58" y="${ty}" width="${W - 116}" height="28"/></clipPath>`
+  g += `<linearGradient id="tapefade" x1="0" x2="1"><stop offset="0" stop-color="${P.ground}"/><stop offset="0.06" stop-color="${P.ground}" stop-opacity="0"/><stop offset="0.94" stop-color="${P.ground}" stop-opacity="0"/><stop offset="1" stop-color="${P.ground}"/></linearGradient></defs>`
+  g += `<line x1="58" y1="${ty}" x2="${W - 58}" y2="${ty}" stroke="${P.ink}" stroke-opacity="0.3"/><line x1="58" y1="${ty + 3}" x2="${W - 58}" y2="${ty + 3}" stroke="${P.ink}" stroke-opacity="0.12"/>`
+  g += `<line x1="58" y1="${ty + 28}" x2="${W - 58}" y2="${ty + 28}" stroke="${P.ink}" stroke-opacity="0.3"/>`
   g +=
-    `<g clip-path="url(#tape)"><g><animateTransform attributeName="transform" type="translate" from="0 0" to="-${Lt} 0" dur="${n(Lt / 36)}s" repeatCount="indefinite"/>` +
-    `<text x="44" y="${ty + 18}" font-family="${MONO}" font-size="11" textLength="${n(Lt * 2)}" lengthAdjust="spacing" xml:space="preserve">${tape}${tape}</text></g></g>`
-  return plate(W, H, g, 'Embermeter, model EM-1: a live instrument panel for Claude Code', 'hero', sunDefs('hero') + inkDefs('hero'))
+    `<g clip-path="url(#tape)"><g><animateTransform attributeName="transform" type="translate" from="0 0" to="-${Lt} 0" dur="${n(Lt / 34)}s" repeatCount="indefinite"/>` +
+    `<text x="58" y="${ty + 19}" font-family="${MONO}" font-size="11" textLength="${n(Lt * 2)}" lengthAdjust="spacing" xml:space="preserve">${tape}${tape}</text></g>` +
+    `<rect x="58" y="${ty}" width="${W - 116}" height="28" fill="url(#tapefade)"/></g>`
+  g += t(58, H - 28, 'No. 0001', { font: MONO, size: 8.5, color: P.faint, ls: 2 })
+  g += t(W - 58, H - 28, 'MIT · LOCAL ONLY · NO NETWORK', { font: MONO, size: 8.5, color: P.faint, ls: 2, anchor: 'end' })
+
+  const extra =
+    `<filter id="hero-bleed" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="10"/></filter>` +
+    `<filter id="hero-edge" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="5" result="w"/><feDisplacementMap in="SourceGraphic" in2="w" scale="5"/></filter>` +
+    `<linearGradient id="hero-landfade" x1="380" x2="${W - 50}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.22" stop-color="#fff"/><stop offset="0.86" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>` +
+    `<mask id="hero-land" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="url(#hero-landfade)"/></mask>` +
+    `<linearGradient id="hero-water" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${P.steel}" stop-opacity="0.10"/><stop offset="1" stop-color="${P.steel}" stop-opacity="0"/></linearGradient>`
+  return plate(W, H, g, 'Embermeter, model EM-1: a live instrument panel for Claude Code', 'hero', sunDefs('hero') + inkDefs('hero') + extra)
 }
 
 // ---------------------------------------------------------------- section plates
