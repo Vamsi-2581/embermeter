@@ -56,7 +56,7 @@ export const parseConfig = (o: Readonly<Record<string, unknown>> = {}): Cfg => {
     heavy = new RegExp(DEFAULT_HEAVY)
   }
   return {
-    theme: o.theme === 'day' || o.theme === 'washi' ? o.theme : 'night',
+    theme: o.theme === 'night' || o.theme === 'day' ? o.theme : 'washi',
     motion: o.motion === 'reduced' || o.motion === 'off' ? o.motion : 'smooth',
     maxTempC: num(o.maxTempC, 80, 40, 110),
     minBatteryPct: num(o.minBatteryPct, 20, 0, 100),
