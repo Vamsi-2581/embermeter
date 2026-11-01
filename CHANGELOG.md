@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-01
+
 ### Added
 - **Spend** tab (key `3`): a cost waterfall turn by turn with the budget line, cost and tokens split by model, and a 30-day calendar of spend.
 - **Loop watch:** flags the same call repeated back to back, or the same call failing again and again. It raises an alert and costs 15 health points while it lasts.
@@ -15,6 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 - The README art and screenshots are redrawn in the washi style: paper grain, a vermilion sun dial, ink mountains, ensō section marks and a hanko seal.
+- Washi is the default theme. Set `theme: night` for the previous look.
 - Tabs are now Overview, Context, Spend, Tools, Files, Agents, System and Log, on keys `1`–`8`.
 
 ## [1.0.0] - 2026-11-01
@@ -41,5 +44,6 @@ First public release.
 ### Security
 - No network, no file writes, no processes. Every hook fails open. All SVG text is escaped.
 
-[Unreleased]: https://github.com/X-Saikat-93/embermeter/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/X-Saikat-93/embermeter/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/X-Saikat-93/embermeter/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/X-Saikat-93/embermeter/releases/tag/v1.0.0
