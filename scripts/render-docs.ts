@@ -131,6 +131,12 @@ b = {
   compactions: 1,
   running: true,
   turnStart: now - 37_000,
+  branch: 'feat/cache-layer',
+  // The five-hour window has climbed 20% in the last 35 minutes, so it fills before it resets.
+  limitHist: {
+    five_hour: { resetsAt: new Date(now + 2.4 * 3600_000).toISOString(), pts: [[now - 40 * 60_000, 26], [now - 5 * 60_000, 46]] },
+    seven_day: { resetsAt: null, pts: [[now - 40 * 60_000, 21]] },
+  },
   now,
 }
 
@@ -152,7 +158,7 @@ const variants = [
 ] as const
 for (const [suffix, theme, cols] of variants) {
   // Reduced motion: eases only, no endless loops, so an open README tab stops drawing once it settles.
-  const c =parseConfig({ budgetUsd: 5, theme, commandPrefix: 'rtk', threads: 16, motion: 'reduced' })
+  const c =parseConfig({ budgetUsd: 5, dailyBudgetUsd: 6, theme, commandPrefix: 'rtk', threads: 16, motion: 'reduced' })
   const D = draw.drawContext(c, null, cols)
   const pages: Record<string, string> = {
     header: draw.header(D, b, c),
@@ -164,6 +170,7 @@ for (const [suffix, theme, cols] of variants) {
     agents: draw.agents(D, b),
     system: draw.system(D, b, c),
     strip: draw.strip(D, b, c),
+    card: draw.card(D, b, c),
   }
   for (const [name, svg] of Object.entries(pages)) {
     if (suffix && name !== 'overview') continue
