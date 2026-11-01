@@ -14,13 +14,16 @@ import {
   endTurn,
   estTokens,
   finishCall,
+  gitDirOf,
   health,
+  isQuiet,
   kfmt,
   log,
   money,
   newAlerts,
   normalize,
   parseConfig,
+  parseHead,
   pickTemp,
   refuse,
   report,
@@ -35,7 +38,7 @@ import {
   withVitals,
 } from './core'
 import type { Cfg } from './core'
-import { agents as drawAgents, contextPage, drawContext, files as drawFiles, header, overview, spend, strip, system, tools as drawTools } from './draw'
+import { agents as drawAgents, card, contextPage, drawContext, files as drawFiles, header, overview, spend, strip, system, tools as drawTools } from './draw'
 
 const PANE = 'embermeter'
 const TABS: { id: Tab; label: string; key: string }[] = [
@@ -129,6 +132,21 @@ const refreshComp = async ($: any, force = false) => {
   const u = await $.session.usage({ breakdown: 'summary' }).catch(() => null)
   const comp = toComposition(u?.context?.breakdown, now)
   if (comp) await set($, b => ({ ...b, comp, model: b.model || comp.model }))
+  await refreshBranch($)
+}
+
+// The git branch, from .git/HEAD under the project root (read-only; no git process). In a worktree .git is a
+// file naming the real git directory.
+const refreshBranch = async ($: any) => {
+  const root = await $.session.root().catch(() => null)
+  if (!root) return
+  let head = await readText($, `${root}/.git/HEAD`)
+  if (head === null) {
+    const dir = gitDirOf(await readText($, `${root}/.git`))
+    if (dir) head = await readText($, `${dir.startsWith('/') ? dir : `${root}/${dir}`}/HEAD`)
+  }
+  const branch = parseHead(head)
+  if (branch !== (await get($)).branch) await set($, b => ({ ...b, branch }))
 }
 
 // ---------------------------------------------------------------- side effects
@@ -152,11 +170,12 @@ const statusText = (b: Board) => {
 
 const raise = async ($: any) => {
   const b = await get($)
-  const fresh = newAlerts(b, cfg)
+  const fresh = newAlerts(b, cfg, life?.days?.[dayKey(b.now)]?.usd ?? null)
   if (!fresh.length) return
   const at = await $.clock.now()
   await set($, x => fresh.reduce((acc, a) => log({ ...acc, alerts: [...acc.alerts, a.key] }, at, 'alert', a.text, 'warn'), x))
-  if (cfg.alerts) for (const a of fresh) $.ui.toast(`Embermeter · ${a.text}`)
+  // Quiet hours hold the toasts only; the alert is still logged and shown in the pane.
+  if (cfg.alerts && !isQuiet(cfg, at)) for (const a of fresh) $.ui.toast(`Embermeter · ${a.text}`)
 }
 
 // One timer drives the dashboard: clocks every second while work runs, sensors every 5th second.
@@ -192,6 +211,11 @@ const copyReport = async ($: any, surface?: any) => {
   $.ui.toast('Embermeter report copied')
 }
 
+const copyCard = async ($: any, surface?: any) => {
+  await $.ui.copy({ text: card(drawContext(cfg, null, undefined), await get($), cfg), surface })
+  $.ui.toast('Embermeter session card copied as SVG')
+}
+
 const resetBoard = async ($: any) => {
   const now = await $.clock.now()
   await set($, () => emptyBoard(now))
@@ -208,8 +232,8 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'embermeter',
-      description: 'Embermeter dashboard: open, close, report, copy, reset, or a tab (overview context spend tools files agents system log)',
-      argumentHint: '[open|close|report|copy|reset|<tab>]',
+      description: 'Embermeter dashboard: open, close, report, copy, card, reset, or a tab (overview context spend tools files agents system log)',
+      argumentHint: '[open|close|report|copy|card|reset|<tab>]',
     })
     const fresh = (await get($)).startedAt === 0
     if (fresh) {
@@ -230,6 +254,10 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'embermeter' }, async ($, e) => {
     const arg = String(e.args ?? '').trim().toLowerCase()
     if (arg === 'report') return { text: report(await get($), cfg, life) }
+    if (arg === 'card') {
+      await copyCard($)
+      return { text: 'Embermeter session card copied to the clipboard as SVG. Paste it into a .svg file to share it.' }
+    }
     if (arg === 'copy') {
       await copyReport($)
       return { text: 'Embermeter report copied to the clipboard.' }
@@ -409,6 +437,9 @@ export const register: Register = (on, options) => {
           ))}
           <Button key="copy" plain onPress={(press: any) => copyReport($, press?.surface)}>
             Copy report
+          </Button>
+          <Button key="card" plain onPress={(press: any) => copyCard($, press?.surface)}>
+            Copy card
           </Button>
           <Button key="reset" plain onPress={() => resetBoard($)}>
             Reset
