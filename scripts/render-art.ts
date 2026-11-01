@@ -59,7 +59,7 @@ const paper = (id: string, w: number, h: number) =>
 const sunDefs = (id: string) =>
   `<radialGradient id="${id}-sun" cx="0.62" cy="0.7" r="0.75"><stop offset="0" stop-color="#e0574a"/><stop offset="0.65" stop-color="${P.amber}"/><stop offset="1" stop-color="#b93127"/></radialGradient>` +
   `<filter id="${id}-speckle" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="1" seed="9"/>` +
-  `<feColorMatrix values="0 0 0 0 0.95  0 0 0 0 0.88  0 0 0 0 0.8  0 0 0 0.35 -0.05"/></filter>`
+  `<feColorMatrix values="0 0 0 0 0.95  0 0 0 0 0.88  0 0 0 0 0.8  0 0 0 0.16 -0.03"/></filter>`
 
 const sun = (id: string, cx: number, cy: number, r: number) =>
   `<clipPath id="${id}-sunclip"><circle cx="${cx}" cy="${cy}" r="${r}"/></clipPath>` +
@@ -71,31 +71,67 @@ const inkDefs = (id: string) =>
   `<linearGradient id="${id}-ink" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${P.ink}"/><stop offset="0.55" stop-color="#3b3f40" stop-opacity="0.9"/><stop offset="1" stop-color="#5b5d5a" stop-opacity="0"/></linearGradient>` +
   `<linearGradient id="${id}-redface" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${P.amber}" stop-opacity="0.85"/><stop offset="1" stop-color="${P.amber}" stop-opacity="0"/></linearGradient>` +
   `<filter id="${id}-mist" x="-30%" y="-80%" width="160%" height="260%"><feGaussianBlur stdDeviation="9"/></filter>` +
-  `<filter id="${id}-soft" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="2" seed="2" result="n"/>` +
-  `<feDisplacementMap in="SourceGraphic" in2="n" scale="3"/></filter>`
+''
 
-// A peak with its sunlit face, a red ridge behind, and mist across the foot.
+// Deterministic jitter in -1..1, so a ridge looks hand-drawn but renders the same every time.
+const jitter = (i: number, seed: number) => {
+  const v = Math.sin(i * 12.9898 + seed * 78.233) * 43758.5453
+  return (v - Math.floor(v)) * 2 - 1
+}
+
+// Points from a to b (a excluded), nudged up and down like a brushed ridge line.
+const slope = (a: [number, number], b: [number, number], steps: number, amp: number, seed: number): [number, number][] =>
+  Array.from({ length: steps }, (_, i) => {
+    const f = (i + 1) / steps
+    const y = a[1] + (b[1] - a[1]) * f
+    return [a[0] + (b[0] - a[0]) * f, i === steps - 1 ? y : y + amp * jitter(i, seed)] as [number, number]
+  })
+
+// A peak in sumi: a paler peak behind, the main ridge fading into mist, its sunlit face washed in vermilion and kept
+// inside the outline, a few dry-brush gullies, and mist drifting across the foot. Units: 280 wide, 124 high.
 const mountain = (id: string, x: number, base: number, s: number) => {
   const X = (v: number) => n(x + v * s)
   const Y = (v: number) => n(base - v * s)
+  const path = (pts: [number, number][]) => `M ${pts.map(([px, py]) => `${X(px)} ${Y(py)}`).join(' L ')} Z`
+  const apex: [number, number] = [100, 124]
+  const main: [number, number][] = [
+    [-34, 0],
+    ...slope([-34, 0], [38, 56], 6, 2.5, 1),
+    ...slope([38, 56], apex, 7, 2.2, 2),
+    ...slope(apex, [148, 72], 6, 2.2, 3),
+    ...slope([148, 72], [170, 60], 2, 1.5, 4),
+    ...slope([170, 60], [212, 26], 5, 2, 5),
+    ...slope([212, 26], [262, 0], 4, 1.5, 6),
+  ]
+  const back: [number, number][] = [[150, 0], ...slope([150, 0], [206, 86], 6, 2, 7), ...slope([206, 86], [286, 0], 7, 2, 8)]
+  const right = main.filter(([px, py]) => px >= apex[0] && py > 0)
+  const face: [number, number][] = [...right, [176, 8], [140, 30], [116, 70]]
+  const gully = (pts: [number, number][], o: number) =>
+    `<path d="M ${pts.map(([px, py]) => `${X(px)} ${Y(py)}`).join(' L ')}" fill="none" stroke="${P.ink}" stroke-opacity="${o}" stroke-width="${n(0.9 * s)}" stroke-linecap="round"/>`
   return (
-    `<g filter="url(#${id}-soft)">` +
-    `<path d="M ${X(70)} ${Y(0)} L ${X(150)} ${Y(66)} L ${X(168)} ${Y(58)} L ${X(205)} ${Y(30)} L ${X(240)} ${Y(0)} Z" fill="${P.amber}" opacity="0.45"/>` +
-    `<path d="M ${X(-20)} ${Y(0)} L ${X(30)} ${Y(38)} L ${X(62)} ${Y(70)} L ${X(80)} ${Y(96)} L ${X(92)} ${Y(124)} L ${X(104)} ${Y(112)} L ${X(130)} ${Y(80)} L ${X(150)} ${Y(56)} L ${X(190)} ${Y(0)} Z" fill="url(#${id}-ink)"/>` +
-    `<path d="M ${X(92)} ${Y(124)} L ${X(104)} ${Y(112)} L ${X(130)} ${Y(80)} L ${X(150)} ${Y(56)} L ${X(176)} ${Y(18)} L ${X(118)} ${Y(40)} L ${X(100)} ${Y(84)} Z" fill="url(#${id}-redface)"/>` +
+    `<clipPath id="${id}-peak"><path d="${path(main)}"/></clipPath>` +
+    `<path d="${path(back)}" fill="url(#${id}-redface)" opacity="0.42"/>` +
+    `<path d="${path(back)}" fill="url(#${id}-ink)" opacity="0.28"/>` +
+    `<path d="${path(main)}" fill="url(#${id}-ink)"/>` +
+    `<g clip-path="url(#${id}-peak)">` +
+    `<path d="${path(face)}" fill="url(#${id}-redface)"/>` +
+    gully([[100, 120], [96, 96], [86, 74], [80, 48]], 0.35) +
+    gully([[104, 116], [112, 92], [118, 70]], 0.3) +
+    gully([[70, 70], [62, 46], [58, 24]], 0.22) +
+    gully([[160, 60], [150, 40], [146, 20]], 0.2) +
     `</g>` +
-    `<ellipse cx="${X(85)}" cy="${Y(4)}" rx="${n(150 * s)}" ry="${n(18 * s)}" fill="${P.ground}" filter="url(#${id}-mist)" opacity="0.95">` +
-    `<animate attributeName="cx" values="${X(75)};${X(98)};${X(75)}" dur="14s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/></ellipse>`
+    `<ellipse cx="${X(110)}" cy="${Y(4)}" rx="${n(170 * s)}" ry="${n(20 * s)}" fill="${P.ground}" filter="url(#${id}-mist)" opacity="0.95">` +
+    `<animate attributeName="cx" values="${X(98)};${X(124)};${X(98)}" dur="14s" repeatDur="20s" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/></ellipse>`
   )
 }
 
 // A bird in sumi: wings beat, and the flock drifts.
 const bird = (x: number, y: number, s: number, phase: number) =>
   `<g transform="translate(${n(x)} ${n(y)}) scale(${s})"><path d="M -9 -1 Q -5 -6 0 0 Q 5 -6 9 -1 Q 5 -2.5 0 2.2 Q -5 -2.5 -9 -1 Z" fill="${P.ink}">` +
-  `<animateTransform attributeName="transform" type="scale" values="1 1;1 0.35;1 1" dur="0.95s" begin="-${n(phase)}s" repeatCount="indefinite"/></path></g>`
+  `<animateTransform attributeName="transform" type="scale" values="1 1;1 0.35;1 1" dur="0.95s" begin="-${n(phase)}s" repeatDur="20s"/></path></g>`
 
 const flock = (pts: [number, number, number][], dx: number, dy: number, dur: number) =>
-  `<g><animateTransform attributeName="transform" type="translate" values="0 0;${dx} ${dy};0 0" dur="${dur}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>` +
+  `<g><animateTransform attributeName="transform" type="translate" values="0 0;${dx} ${dy};0 0" dur="${dur}s" repeatDur="20s" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>` +
   pts.map(([x, y, s], i) => bird(x, y, s, i * 0.31)).join('') +
   `</g>`
 
@@ -128,7 +164,7 @@ const ridge = (pts: [number, number][], foot: number, fill: string, opacity: num
 // A band of mist that drifts sideways and back.
 const mistBand = (id: string, cx: number, cy: number, rx: number, ry: number, dx: number, dur: number, o = 0.9) =>
   `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${P.ground}" filter="url(#${id}-mist)" opacity="${o}">` +
-  `<animate attributeName="cx" values="${cx};${cx + dx};${cx}" dur="${dur}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/></ellipse>`
+  `<animate attributeName="cx" values="${cx};${cx + dx};${cx}" dur="${dur}s" repeatDur="20s" calcMode="spline" keyTimes="0;0.5;1" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/></ellipse>`
 
 // A tapered brush stroke, thick in the middle and dry at both ends.
 const brushStroke = (x: number, y: number, w: number, h: number, color: string) =>
@@ -155,8 +191,9 @@ const hero = () => {
   }
 
   // The sun bleeds a little into the paper, as watercolour does.
-  g += `<circle cx="${cx}" cy="${cy}" r="${r + 14}" fill="${P.amber}" opacity="0.10" filter="url(#hero-bleed)"/>`
-  g += `<g filter="url(#hero-edge)">${sun('hero', cx, cy, r)}</g>`
+  // A soft halo, as watercolour spreads into the paper. Gradients only: filters that move pixels get cropped in Chrome.
+  g += `<circle cx="${cx}" cy="${cy}" r="${r + 30}" fill="url(#hero-halo)"/>`
+  g += sun('hero', cx, cy, r)
 
   // The dial: a fine ring of ticks with numerals, a crimson red line, and a pointer that settles on the reading.
   for (let i = 0; i <= 40; i++) {
@@ -189,9 +226,9 @@ const hero = () => {
   for (const [x, rr, begin, dur] of sparks) {
     g +=
       `<circle cx="${x}" cy="${cy - r * 0.55}" r="${rr}" fill="${P.amber}" opacity="0">` +
-      `<animate attributeName="cy" values="${cy - r * 0.55};${cy - r - 46}" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/>` +
-      `<animate attributeName="cx" values="${x};${x + 9};${x - 5}" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/>` +
-      `<animate attributeName="opacity" values="0;0.9;0" keyTimes="0;0.25;1" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/></circle>`
+      `<animate attributeName="cy" values="${cy - r * 0.55};${cy - r - 46}" dur="${dur}s" begin="${begin}s" repeatDur="20s"/>` +
+      `<animate attributeName="cx" values="${x};${x + 9};${x - 5}" dur="${dur}s" begin="${begin}s" repeatDur="20s"/>` +
+      `<animate attributeName="opacity" values="0;0.9;0" keyTimes="0;0.25;1" dur="${dur}s" begin="${begin}s" repeatDur="20s"/></circle>`
   }
 
   // Three ranges, each paler with distance, with mist between them; the whole landscape dissolves into the paper at its edges.
@@ -213,8 +250,8 @@ const hero = () => {
   ].forEach(([y, w, d]) => {
     g +=
       `<rect x="${n(cx - w! / 2)}" y="${y}" width="${w}" height="2.2" rx="1.1" fill="${P.amber}" opacity="0.55">` +
-      `<animate attributeName="x" values="${n(cx - w! / 2)};${n(cx - w! / 2 + 5)};${n(cx - w! / 2 - 3)};${n(cx - w! / 2)}" dur="4.2s" begin="-${d}s" repeatCount="indefinite"/>` +
-      `<animate attributeName="opacity" values="0.55;0.25;0.55" dur="3.1s" begin="-${d}s" repeatCount="indefinite"/></rect>`
+      `<animate attributeName="x" values="${n(cx - w! / 2)};${n(cx - w! / 2 + 5)};${n(cx - w! / 2 - 3)};${n(cx - w! / 2)}" dur="4.2s" begin="-${d}s" repeatDur="20s"/>` +
+      `<animate attributeName="opacity" values="0.55;0.25;0.55" dur="3.1s" begin="-${d}s" repeatDur="20s"/></rect>`
   })
   g += `<line x1="380" y1="${lake}" x2="${W - 34}" y2="${lake}" stroke="${P.ink}" stroke-opacity="0.18"/>`
   g += `</g>`
@@ -248,7 +285,7 @@ const hero = () => {
     let s = `<rect x="${x}" y="246" width="104" height="58" rx="3" fill="${P.panel}" fill-opacity="0.55"/>`
     s += `<line x1="${x}" y1="246" x2="${x + 104}" y2="246" stroke="${P.ink}" stroke-opacity="0.6" stroke-width="1.2"/>`
     s += t(x + 10, 264, cap, { font: MONO, size: 8, color: P.faint, ls: 2 })
-    s += `<circle cx="${x + 95}" cy="261" r="2.6" fill="${P.amber}"><animate attributeName="opacity" values="1;0.25;1" dur="1.8s" repeatCount="indefinite"/></circle>`
+    s += `<circle cx="${x + 95}" cy="261" r="2.6" fill="${P.amber}"><animate attributeName="opacity" values="1;0.25;1" dur="1.8s" repeatDur="20s"/></circle>`
     const k2 = values.length
     values.forEach((v, i) => {
       const vals = values.map((_, j) => (j === i ? 1 : 0)).join(';') + `;${i === 0 ? 1 : 0}`
@@ -259,7 +296,7 @@ const hero = () => {
         weight: 600,
         color: P.ink,
         attrs: ` opacity="${i === 0 ? 1 : 0}"`,
-        inner: `<animate attributeName="opacity" values="${vals}" keyTimes="${times}" calcMode="discrete" dur="${k2 * 1.7}s" repeatCount="indefinite"/>`,
+        inner: `<animate attributeName="opacity" values="${vals}" keyTimes="${times}" calcMode="discrete" dur="${k2 * 1.7}s" repeatDur="20s"/>`,
       })
     })
     return s
@@ -291,15 +328,14 @@ const hero = () => {
   g += `<line x1="58" y1="${ty}" x2="${W - 58}" y2="${ty}" stroke="${P.ink}" stroke-opacity="0.3"/><line x1="58" y1="${ty + 3}" x2="${W - 58}" y2="${ty + 3}" stroke="${P.ink}" stroke-opacity="0.12"/>`
   g += `<line x1="58" y1="${ty + 28}" x2="${W - 58}" y2="${ty + 28}" stroke="${P.ink}" stroke-opacity="0.3"/>`
   g +=
-    `<g clip-path="url(#tape)"><g><animateTransform attributeName="transform" type="translate" from="0 0" to="-${Lt} 0" dur="${n(Lt / 34)}s" repeatCount="indefinite"/>` +
+    `<g clip-path="url(#tape)"><g><animateTransform attributeName="transform" type="translate" from="0 0" to="-${Lt} 0" dur="${n(Lt / 34)}s" repeatDur="20s"/>` +
     `<text x="58" y="${ty + 19}" font-family="${MONO}" font-size="11" textLength="${n(Lt * 2)}" lengthAdjust="spacing" xml:space="preserve">${tape}${tape}</text></g>` +
     `<rect x="58" y="${ty}" width="${W - 116}" height="28" fill="url(#tapefade)"/></g>`
   g += t(58, H - 28, 'No. 0001', { font: MONO, size: 8.5, color: P.faint, ls: 2 })
   g += t(W - 58, H - 28, 'MIT · LOCAL ONLY · NO NETWORK', { font: MONO, size: 8.5, color: P.faint, ls: 2, anchor: 'end' })
 
   const extra =
-    `<filter id="hero-bleed" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="10"/></filter>` +
-    `<filter id="hero-edge" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="5" result="w"/><feDisplacementMap in="SourceGraphic" in2="w" scale="5"/></filter>` +
+    `<radialGradient id="hero-halo"><stop offset="0.72" stop-color="${P.amber}" stop-opacity="0.16"/><stop offset="1" stop-color="${P.amber}" stop-opacity="0"/></radialGradient>` +
     `<linearGradient id="hero-landfade" x1="380" x2="${W - 50}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.22" stop-color="#fff"/><stop offset="0.86" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>` +
     `<mask id="hero-land" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="url(#hero-landfade)"/></mask>` +
     `<linearGradient id="hero-water" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${P.steel}" stop-opacity="0.10"/><stop offset="1" stop-color="${P.steel}" stop-opacity="0"/></linearGradient>`
@@ -353,7 +389,7 @@ const TILES: Tile[] = [
     lines: ['Turns left before auto-', 'compact, learned per turn.'],
     glyph: () =>
       `<path d="M 30 62 L 62 18 M 120 62 L 88 18" stroke="${P.sub}" stroke-width="1.4"/>` +
-      `<line x1="75" y1="62" x2="75" y2="18" stroke="${P.amber}" stroke-width="2" stroke-dasharray="6 6"><animate attributeName="stroke-dashoffset" from="0" to="12" dur="0.8s" repeatCount="indefinite"/></line>` +
+      `<line x1="75" y1="62" x2="75" y2="18" stroke="${P.amber}" stroke-width="2" stroke-dasharray="6 6"><animate attributeName="stroke-dashoffset" from="0" to="12" dur="0.8s" repeatDur="20s"/></line>` +
       t(148, 50, '9', { font: MONO, size: 30, weight: 600, color: P.amber }) +
       t(170, 50, 'turns', { size: 10, color: P.faint }),
   },
@@ -427,7 +463,7 @@ const TILES: Tile[] = [
       let s = `<path d="M 24 40 L 174 40" stroke="${P.line}" stroke-width="1.4"/>`
       xs.forEach((x, i) => (s += `<circle cx="${x}" cy="40" r="7" fill="${P.panel}" stroke="${i === 3 ? P.amber : P.sub}" stroke-width="1.4"/>`))
       for (let k = 0; k < 3; k++) {
-        s += `<circle r="2.6" fill="${P.amber}"><animateMotion path="M 24 40 L 174 40" dur="1.8s" begin="-${n(k * 0.6)}s" repeatCount="indefinite" calcMode="spline" keyTimes="0;1" keySplines="0.45 0 0.55 1"/></circle>`
+        s += `<circle r="2.6" fill="${P.amber}"><animateMotion path="M 24 40 L 174 40" dur="1.8s" begin="-${n(k * 0.6)}s" repeatDur="20s" calcMode="spline" keyTimes="0;1" keySplines="0.45 0 0.55 1"/></circle>`
       }
       return s + ['prompt', 'model', 'gate', 'tools'].map((l, i) => t(xs[i]!, 64, l, { size: 8.5, color: P.faint, anchor: 'middle' })).join('')
     },
@@ -462,7 +498,7 @@ const TILES: Tile[] = [
       ]
         .map(([x, w, c], i) => {
           const y = 18 + i * 15
-          const grow = i === 2 ? `<animate attributeName="width" values="20;${w};${w}" keyTimes="0;0.8;1" dur="3s" repeatCount="indefinite"/>` : ''
+          const grow = i === 2 ? `<animate attributeName="width" values="20;${w};${w}" keyTimes="0;0.8;1" dur="3s" repeatDur="20s"/>` : ''
           return `<line x1="16" y1="${y + 4}" x2="184" y2="${y + 4}" stroke="${P.grid}"/><rect x="${x}" y="${y}" width="${w}" height="8" rx="4" fill="${c}">${grow}</rect>`
         })
         .join(''),
@@ -471,7 +507,7 @@ const TILES: Tile[] = [
     title: 'Heat guard',
     lines: ['Holds heavy jobs while the', 'CPU runs hot.'],
     glyph: () =>
-      `<g transform="translate(40 40)"><path d="M 0 -22 C 10 -10 16 -2 12 10 C 9 19 -9 19 -12 10 C -15 1 -8 -6 -4 -12 C -3 -6 0 -3 3 -4 C 4 -10 2 -16 0 -22 Z" fill="${P.amber}"><animateTransform attributeName="transform" type="scale" values="1 1;1.04 0.96;0.97 1.05;1 1" dur="1.3s" repeatCount="indefinite"/></path>` +
+      `<g transform="translate(40 40)"><path d="M 0 -22 C 10 -10 16 -2 12 10 C 9 19 -9 19 -12 10 C -15 1 -8 -6 -4 -12 C -3 -6 0 -3 3 -4 C 4 -10 2 -16 0 -22 Z" fill="${P.amber}"><animateTransform attributeName="transform" type="scale" values="1 1;1.04 0.96;0.97 1.05;1 1" dur="1.3s" repeatDur="20s"/></path>` +
       `<path d="M 0 2 C 4 6 5 9 3 13 C 1 16 -3 16 -4 13 C -5 9 -2 6 0 2 Z" fill="${P.ground}" opacity="0.55"/></g>` +
       `<line x1="76" y1="28" x2="184" y2="28" stroke="${P.rust}" stroke-width="1.4"/>` +
       t(184, 22, 'limit 80°', { font: MONO, size: 8.5, color: P.rust, anchor: 'end' }) +
@@ -491,7 +527,7 @@ const TILES: Tile[] = [
     lines: ['Spots the same call again', 'and again, and says so.'],
     glyph: () =>
       `<g transform="translate(40 38)"><circle r="17" fill="none" stroke="${P.line}" stroke-width="5"/>` +
-      `<circle r="17" fill="none" stroke="${P.amber}" stroke-width="5" stroke-linecap="round" stroke-dasharray="40 67"><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="1.6s" repeatCount="indefinite"/></circle></g>` +
+      `<circle r="17" fill="none" stroke="${P.amber}" stroke-width="5" stroke-linecap="round" stroke-dasharray="40 67"><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="1.6s" repeatDur="20s"/></circle></g>` +
       t(74, 34, 'npm test ×3', { font: MONO, size: 11, color: P.ink }) +
       t(74, 50, 'may be looping', { size: 10, color: P.rust }),
   },
@@ -537,7 +573,7 @@ const TILES: Tile[] = [
       return spend
         .map((v, i) => {
           const today = i === spend.length - 1
-          return `<rect x="${16 + (i % 8) * 21}" y="${16 + Math.floor(i / 8) * 15}" width="18" height="12" rx="2" fill="${v ? P.amber : P.line}" opacity="${v ? n(0.2 + v * 0.8) : 1}"${today ? ` stroke="${P.amber}" stroke-width="1.2"` : ''}>${today ? `<animate attributeName="opacity" values="0.4;1;0.4" dur="2.4s" repeatCount="indefinite"/>` : ''}</rect>`
+          return `<rect x="${16 + (i % 8) * 21}" y="${16 + Math.floor(i / 8) * 15}" width="18" height="12" rx="2" fill="${v ? P.amber : P.line}" opacity="${v ? n(0.2 + v * 0.8) : 1}"${today ? ` stroke="${P.amber}" stroke-width="1.2"` : ''}>${today ? `<animate attributeName="opacity" values="0.4;1;0.4" dur="2.4s" repeatDur="20s"/>` : ''}</rect>`
         })
         .join('')
     },
