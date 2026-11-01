@@ -22,6 +22,8 @@ export type Call = {
   id: string
   tool: string
   detail: string
+  // The file a Read, Edit or Write worked on, so its result size can be credited to that file.
+  file?: string
   status: CallStatus
   agent: boolean
   at: number
@@ -31,7 +33,11 @@ export type Call = {
 // `out`: estimated tokens the tool's results fed back into the context (absent on boards stored before it existed).
 export type ToolStat = { n: number; ok: number; fail: number; denied: number; totalMs: number; durs: number[]; out?: number }
 
-export type FileStat = { read: number; edit: number; write: number; last: number }
+// `out`: estimated tokens this file's reads fed back into the context.
+export type FileStat = { read: number; edit: number; write: number; last: number; out?: number }
+
+// Readings of one rate-limit window, kept while the window stays the same (same reset time).
+export type LimitTrack = { resetsAt: string | null; pts: [number, number][] }
 
 export type AgentStatus = 'run' | 'done' | 'fail' | 'stopped'
 
@@ -95,6 +101,8 @@ export type Board = {
   turns: Turn[]
   turnCount: number
   models: Record<string, ModelStat>
+  limitHist: Record<string, LimitTrack>
+  branch: string
   calls: Call[]
   stats: Record<string, ToolStat>
   files: Record<string, FileStat>
