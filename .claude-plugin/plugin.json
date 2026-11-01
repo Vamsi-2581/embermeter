@@ -47,6 +47,24 @@
       "type": "number",
       "default": 0
     },
+    "dailyBudgetUsd": {
+      "title": "Daily budget (USD)",
+      "description": "Cost budget for a calendar day across sessions; alerts at 80% and 100%. 0 turns it off",
+      "type": "number",
+      "default": 0
+    },
+    "longTurnMin": {
+      "title": "Long turn (minutes)",
+      "description": "Alert when a single turn runs longer than this; 0 turns it off",
+      "type": "number",
+      "default": 10
+    },
+    "quietHours": {
+      "title": "Quiet hours",
+      "description": "Hours with no toasts, as start-end in 24h local time (for example 22-7); the panel keeps updating. Empty turns it off",
+      "type": "string",
+      "default": ""
+    },
     "guard": {
       "title": "Heat guard",
       "description": "Refuse heavy Bash jobs while the laptop is over the temperature limit or low on battery",
